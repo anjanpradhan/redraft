@@ -1,0 +1,20 @@
+.DS_Store
+*.log
+
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/

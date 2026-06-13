@@ -1,0 +1,99 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "redraft"
+description = "Local macOS text fixer engine — fix/improve selected text (stdlib-only)."
+
+dynamic = ["version"]  # single source of truth: src/redraft/__init__.py __version__
+
+dependencies = [
+]
+requires-python = ">=3.12,<3.14"
+
+classifiers = [
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+
+[project.optional-dependencies]
+# Enhanced spelling for the embedded Fix provider (pure-Python, bundled dictionary, offline).
+# Optional: the engine falls back to the curated map when this isn't installed.
+nlp = ["pyspellchecker>=0.8"]
+
+[project.scripts]
+redraft = "redraft.cli:main"
+
+[tool.hatch.version]
+path = "src/redraft/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/redraft"]
+
+[dependency-groups]
+dev = [
+  "pre-commit",
+  "pip-audit",
+]
+test = [
+  "pytest",
+  "coverage",
+  "tox",
+  "pyspellchecker>=0.8",
+]
+
+[tool.uv]
+default-groups = ["dev", "test"]
+keyring-provider = "subprocess"
+
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+exclude = [
+  "tests/data/*",
+  "tests/**/data/*",
+  "tests/fixtures/*",
+  "tests/**/fixtures/*",
+]
+
+fix = true
+unsafe-fixes = true
+
+[tool.ruff.lint]
+select = [
+  "F", "B", "S", "RUF",
+  "UP", "I", "TID",
+  "TCH", "TYP", "ANN",
+  "ARG", "RET",
+  "C4", "PIE", "SIM", "PERF",
+  "PT", "PD",
+  "E", "W", "Q", "ERA",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "ANN201"]
+# Localhost HTTP to user-controlled endpoints (Ollama/LanguageTool):
+"src/redraft/providers/ollama.py" = ["S310"]
+"src/redraft/providers/languagetool.py" = ["S310"]
+# Runs a CLI the operator explicitly configured (command/agent providers, by design):
+"src/redraft/providers/_shell.py" = ["S602", "S603"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore::pytest.PytestCollectionWarning",
+]
+
+[tool.tox]
+env_list = ["3.12", "3.13"]
+requires = ["tox-uv>=1"]
+
+[tool.tox.env_run_base]
+runner = "uv-venv-lock-runner"
+commands = [
+  ["pre-commit", "run", "--all-files"],
+  ["pytest", "tests"]
+]

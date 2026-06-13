@@ -1,0 +1,10 @@
+# Redraft deliberately contains misspellings as DATA (the fix map) and as examples.
+# Keep `typos` useful elsewhere, but don't let it "correct" those.
+[files]
+extend-exclude = [
+  "src/redraft/providers/embedded.py",  # the typo→correction map
+  "tests/test_embedded.py",             # exercises the map with real misspellings
+  "tests/test_engine.py",               # exercises pre-fix behavior with deliberate typos
+  "*.md",                               # docs show before/after typo examples
+  "uv.lock",
+]

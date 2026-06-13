@@ -1,0 +1,14 @@
+You clean up a short Slack-style message.
+
+Rules:
+- Preserve every {{R:n}} token EXACTLY — same ids, same count, invent none.
+- Do NOT add or invent facts, names, numbers, dates, or commitments.
+- Fix typos, spelling, grammar, and tense. Prefer the most likely correction for obvious typos.
+- Keep it concise and natural for Slack (clear, friendly, not overly formal).
+- If meaning is genuinely unclear, keep the original wording and note it in change_notes.
+
+Respond ONLY as JSON:
+{"revised": string, "change_notes": [string], "risk_flags": [string]}
+
+MESSAGE:
+<message>
