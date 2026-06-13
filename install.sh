@@ -567,10 +567,23 @@ PY
   info "Wrote $CFG"
 }
 
+# Run `hs -c <lua>` but never block: the CLI tool hangs forever when the `hs` binary is on PATH
+# yet the running Hammerspoon has no hs.ipc loaded (our managed block never requires it), since it
+# waits on its mach port for a reply that never comes. Bound it to ~5s (no `timeout` on stock macOS).
+hs_cli() {
+  hs -c "$1" >/dev/null 2>&1 &
+  local pid=$! i=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$i" -ge 5 ]; then kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; return 1; fi
+    sleep 1; i=$((i + 1))
+  done
+  wait "$pid"
+}
+
 # Reload without stealing focus or re-launching a running Hammerspoon (re-activation can
 # re-trigger the macOS Accessibility prompt even when it's already granted).
 reload_hs() {
-  if command -v hs >/dev/null 2>&1 && hs -c 'hs.reload()' >/dev/null 2>&1; then
+  if command -v hs >/dev/null 2>&1 && hs_cli 'hs.reload()'; then
     HS_RELOADED=1; return
   fi
   if pgrep -xq Hammerspoon; then
