@@ -36,6 +36,50 @@ def test_invariant_violation_rejected():
         review("ping `code`", "improve", {})
 
 
+def test_llm_invariant_retry_rescues():
+    # An LLM provider (sets .prompt) that drops the token once, then echoes it, is resampled and saved.
+    calls = {"n": 0}
+
+    def flaky(_text, _mode, _config):
+        calls["n"] += 1
+        revised = "dropped the token" if calls["n"] == 1 else "kept {{R:0}}"
+        return ReviewResult(revised=revised, prompt="sent")
+
+    fake = types.SimpleNamespace(__name__="redraft.providers.fake", review=flaky)
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review("ping `code`", "improve", {})
+    assert "`code`" in out["revised"]  # restored after the rescuing retry
+    assert calls["n"] == 2  # original call + one retry
+
+
+def test_llm_invariant_retry_exhausted_raises():
+    # An LLM provider that drops the token on every sample still fails after the bounded retry.
+    calls = {"n": 0}
+
+    def always_drops(_text, _mode, _config):
+        calls["n"] += 1
+        return ReviewResult(revised="dropped the token", prompt="sent")
+
+    fake = types.SimpleNamespace(__name__="redraft.providers.fake", review=always_drops)
+    with mock.patch("redraft.engine.pick_provider", return_value=fake), pytest.raises(RuntimeError, match="invariant"):
+        review("ping `code`", "improve", {})
+    assert calls["n"] == 2  # original + one retry, then gives up
+
+
+def test_deterministic_invariant_failure_not_retried():
+    # A provider with no .prompt (deterministic-style) is never resampled — it fails on the first call.
+    calls = {"n": 0}
+
+    def drops_no_prompt(_text, _mode, _config):
+        calls["n"] += 1
+        return ReviewResult(revised="dropped the token")  # prompt stays None
+
+    fake = types.SimpleNamespace(__name__="redraft.providers.fake", review=drops_no_prompt)
+    with mock.patch("redraft.engine.pick_provider", return_value=fake), pytest.raises(RuntimeError, match="invariant"):
+        review("ping `code`", "improve", {})
+    assert calls["n"] == 1  # no retry for a deterministic provider
+
+
 def test_literal_token_round_trips_through_engine():
     # M2: a user typing {{R:0}} must NOT trigger a false "token invariant violated" — it round-trips.
     out = review("note {{R:0}} stays", "fix", {"fixProvider": "embedded"})
