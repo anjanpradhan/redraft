@@ -28,7 +28,7 @@ def review(text: str, mode: str, config: dict) -> ReviewResult:
     url = cfg.get("url", "http://localhost:11434").rstrip("/") + "/api/chat"
     prompt = build_prompt(mode, text, config)  # full template (with <message> spliced in)
     payload = {
-        "model": cfg.get("model", "llama3.1:8b"),
+        "model": cfg.get("model", "llama3.2:3b"),
         "stream": False,
         "options": {"temperature": 0.2},
         "format": _FORMAT_SCHEMA,
@@ -40,6 +40,17 @@ def review(text: str, mode: str, config: dict) -> ReviewResult:
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             raw = resp.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        # The server answered (so it IS running) but rejected the request — surface its reason
+        # rather than the misleading "is serve running?" hint. A 404 means the model isn't pulled.
+        body = e.read().decode("utf-8", "replace").strip()
+        try:
+            detail = (json.loads(body) or {}).get("error", "") if body else ""
+        except json.JSONDecodeError:
+            detail = body
+        if e.code == 404:
+            raise RuntimeError(f"Ollama has no model '{payload['model']}' — run: ollama pull {payload['model']}") from e
+        raise RuntimeError(f"Ollama at {url} returned HTTP {e.code}" + (f": {detail}" if detail else "")) from e
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise RuntimeError(f"cannot reach Ollama at {url} ({e}); is `ollama serve` running?") from e
     try:

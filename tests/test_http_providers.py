@@ -1,4 +1,7 @@
+import io
 import json
+import urllib.error
+from typing import Never
 
 import pytest
 
@@ -8,7 +11,7 @@ from redraft.providers import languagetool, ollama
 class _Resp:
     """Minimal stand-in for the urlopen context manager."""
 
-    def __init__(self, body):
+    def __init__(self, body) -> None:
         self._b = body.encode()
 
     def read(self):
@@ -21,17 +24,30 @@ class _Resp:
         return False
 
 
-def _urlopen(monkeypatch, fn):
+def _urlopen(monkeypatch, fn) -> None:
     monkeypatch.setattr("urllib.request.urlopen", fn)
 
 
 def test_ollama_timeout_is_friendly(monkeypatch):
-    def boom(*a, **k):
+    def boom(*a, **k) -> Never:
         raise TimeoutError("read timed out")  # not a URLError subclass
 
     _urlopen(monkeypatch, boom)
     with pytest.raises(RuntimeError, match="cannot reach Ollama"):
         ollama.review("hi", "improve", {})
+
+
+def test_ollama_missing_model_is_actionable(monkeypatch):
+    # A 404 from a reachable server means the model isn't pulled — say so (with the fix), not the
+    # misleading "is serve running?" hint.
+    def http_404(*a, **k) -> Never:
+        raise urllib.error.HTTPError(
+            "http://x/api/chat", 404, "Not Found", {}, io.BytesIO(b'{"error":"model not found"}')
+        )
+
+    _urlopen(monkeypatch, http_404)
+    with pytest.raises(RuntimeError, match=r"ollama pull llama3.2:3b"):
+        ollama.review("hi", "improve", {"ollama": {"model": "llama3.2:3b"}})
 
 
 def test_ollama_non_json_body(monkeypatch):
@@ -47,7 +63,7 @@ def test_ollama_happy_path(monkeypatch):
 
 
 def test_languagetool_timeout_is_friendly(monkeypatch):
-    def boom(*a, **k):
+    def boom(*a, **k) -> Never:
         raise TimeoutError("read timed out")
 
     _urlopen(monkeypatch, boom)

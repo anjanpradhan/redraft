@@ -150,6 +150,22 @@ LanguageTool the installer downloads the official server (~200MB) and **honors y
 `brew install openjdk@17`. Let Redraft manage these servers — don't also run
 `brew services start ollama`, or two managers will fight over the port.
 
+#### Choosing an Ollama model
+
+Improve is a short-text rewrite (tone/grammar/clarity on a selection), so a small instruct model
+is plenty — no need for an 8B. Ollama loads the model **on demand** and unloads it after idle
+(`keep_alive`, default 5 min), so it only occupies memory during the few seconds of a rewrite, not
+while you work. On Apple Silicon it runs on the GPU/Metal, so it won't fight your IDEs for CPU. Set
+the model at the installer's "Ollama model" prompt or via `ollama.model` in the config. The default
+is `llama3.2:3b` (already 4-bit `q4_K_M`).
+
+| Model | ~Q4 RAM | Notes |
+|---|---|---|
+| `llama3.2:3b` | ~2–3.5 GB | **Recommended default.** Best-balanced, most-tested small model; good at following rewrite/tone instructions. |
+| `qwen2.5:3b` | ~2–3.5 GB | Strong alternative — often edges out Llama 3.2 3B on instruction-following at the same footprint. Worth A/B-ing on your actual prompts. |
+| `gemma3:4b` | ~3–4 GB | Slightly bigger but notably good at text cleanup/rewriting; pick this if 3B output quality disappoints. |
+| `qwen2.5:1.5b` / `llama3.2:1b` | ~1–1.5 GB | Fallback if 16 GB feels cramped. Noticeably weaker phrasing, but fine for grammar/light tidy-ups. |
+
 ## Configure
 
 `~/.config/redraft/config.json` (read by both the engine and the Spoon):
@@ -160,8 +176,8 @@ LanguageTool the installer downloads the official server (~200MB) and **honors y
   "fixProvider": "embedded",
   "improveProvider": "ollama",        // or "agent", "command", or "none"
   "improve": { "preFix": false },      // optional embedded Fix pass before Improve
-  "ollama": { "url": "http://localhost:11434", "model": "llama3.1:8b" },
-  "command": { "cmd": "ollama run llama3.1:8b", "timeoutMs": 60000 },
+  "ollama": { "url": "http://localhost:11434", "model": "llama3.2:3b" },
+  "command": { "cmd": "ollama run llama3.2:3b", "timeoutMs": 60000 },
   "languagetool": { "url": "http://localhost:8081", "language": "en-US" }
 }
 ```
@@ -172,7 +188,7 @@ Using `command` for **both** Fix and Improve? Give each its own CLI with `comman
 `command.improveCmd` — they override the shared `command.cmd`:
 
 ```jsonc
-"command": { "fixCmd": "my-linter", "improveCmd": "ollama run llama3.1:8b", "timeoutMs": 60000 }
+"command": { "fixCmd": "my-linter", "improveCmd": "ollama run llama3.2:3b", "timeoutMs": 60000 }
 ```
 
 ### Per-app provider profiles
@@ -262,13 +278,16 @@ Server logs (LanguageTool/Ollama) live at `~/.local/share/redraft/logs/`. The ac
 
 - **Reinstall / upgrade:** re-run the install one-liner — it cleanly replaces the venv-installed
   engine, the Spoon, and the managed `init.lua` block, including older layouts. If a config already
-  exists it first asks **"Reuse your last setup?"** (Enter = yes) for a quiet reinstall with no
-  provider prompts; answer `n` to re-pick. Either way your config is **merged** (provider keys
-  updated, everything else preserved). A legacy `~/.hammerspoon/apps/redraft.lua`, if found, is
-  moved to a timestamped backup instead of deleted.
+  exists it first asks **"Reuse your last setup?"** (Enter = yes), which covers **all** prior
+  choices — it restores enhanced spelling if it was on and re-runs setup for any server-backed
+  provider (prompting to start LanguageTool/Ollama); answer `n` to re-pick. Either way your config
+  is **merged** (provider keys updated, everything else preserved). A legacy
+  `~/.hammerspoon/apps/redraft.lua`, if found, is moved to a timestamped backup instead of deleted.
 - **Uninstall:** `bash uninstall.sh` — stops the managed servers, then removes the Spoon, the data
   dir (venv, agents, logs, LanguageTool download), and the managed block; asks before deleting your
-  config; leaves Hammerspoon/Homebrew/Java/Ollama alone.
+  config. It also **offers to remove the Homebrew deps the installer actually installed** (recorded
+  in `install-manifest.tsv`) — each behind a `[y/N]` prompt, with Homebrew itself offered last and
+  only with a warning. Anything you already had is left untouched.
 
 ## Requirements & notes
 

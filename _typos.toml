@@ -3,8 +3,11 @@
 [files]
 extend-exclude = [
   "src/redraft/providers/embedded.py",  # the typo→correction map
+  "tests/test_cli.py",                  # feeds deliberate typos as Fix input ("i think teh ...")
+  "tests/test_http_providers.py",       # asserts Fix output on a deliberate typo ("teh cat")
   "tests/test_embedded.py",             # exercises the map with real misspellings
   "tests/test_engine.py",               # exercises pre-fix behavior with deliberate typos
+  "tests/test_profiles.py",             # provider routing over text carrying deliberate typos
   "*.md",                               # docs show before/after typo examples
-  "uv.lock",
+  "uv.lock",                            # generated lockfile; package names/hashes trip false positives
 ]

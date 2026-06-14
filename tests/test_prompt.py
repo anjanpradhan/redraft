@@ -23,7 +23,7 @@ def test_render_does_not_rescan_substituted_value():
 
 
 @pytest.fixture(autouse=True)
-def _isolated_config(tmp_path, monkeypatch):
+def isolated_config(tmp_path, monkeypatch):
     # Resolve prompt overrides from an empty temp config dir, so these tests exercise the bundled
     # defaults (not whatever the developer has in ~/.config/redraft). Tests that want an override
     # write into tmp_path/redraft themselves.
@@ -54,18 +54,18 @@ def test_unknown_style_falls_back_to_friendly():
     assert "Slack" in build_prompt("improve", "X", {"improveStyle": "nonsense"})
 
 
-def test_config_dir_override_wins(_isolated_config):
-    (_isolated_config / "friendly-prompt.txt").write_text("CUSTOM <message> END")
+def test_config_dir_override_wins(isolated_config):
+    (isolated_config / "friendly-prompt.txt").write_text("CUSTOM <message> END")
     assert build_prompt("improve", "ZZZ", {"improveStyle": "friendly"}) == "CUSTOM ZZZ END"
 
 
-def test_template_without_placeholder_appends_message(_isolated_config):
-    (_isolated_config / "fix-prompt.txt").write_text("NO PLACEHOLDER")
+def test_template_without_placeholder_appends_message(isolated_config):
+    (isolated_config / "fix-prompt.txt").write_text("NO PLACEHOLDER")
     p = build_prompt("fix", "ZZZ", {})
     assert p.startswith("NO PLACEHOLDER")
     assert "MESSAGE:\nZZZ" in p
 
 
-def test_blank_override_falls_back_to_default(_isolated_config):
-    (_isolated_config / "formal-prompt.txt").write_text("   \n  ")  # whitespace-only -> ignored
+def test_blank_override_falls_back_to_default(isolated_config):
+    (isolated_config / "formal-prompt.txt").write_text("   \n  ")  # whitespace-only -> ignored
     assert "email" in build_prompt("improve", "X", {"improveStyle": "formal"}).lower()

@@ -64,10 +64,16 @@ def legacy_commands() -> dict[str, str]:
     """Old default templates that used ``$(cat)``; installers migrate only exact matches."""
     return dict(LEGACY_COMMANDS)
 
+
 # Common dirs where agent CLIs land but which may be absent from the engine's PATH under hs.task.
 _KNOWN_DIRS = [
-    "~/.local/bin", "/opt/homebrew/bin", "/usr/local/bin",
-    "~/.npm-global/bin", "~/.bun/bin", "~/.volta/bin", "/usr/bin",
+    "~/.local/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "~/.npm-global/bin",
+    "~/.bun/bin",
+    "~/.volta/bin",
+    "/usr/bin",
 ]
 
 

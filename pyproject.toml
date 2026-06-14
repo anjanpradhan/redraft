@@ -74,12 +74,16 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "ANN201"]
 # Localhost HTTP to user-controlled endpoints (Ollama/LanguageTool):
 "src/redraft/providers/ollama.py" = ["S310"]
 "src/redraft/providers/languagetool.py" = ["S310"]
 # Runs a CLI the operator explicitly configured (command/agent providers, by design):
 "src/redraft/providers/_shell.py" = ["S602", "S603"]
+# Tests keep the bug/correctness/security rules (F, B, S, RUF, PT, SIM, ...) but drop two families
+# that only add noise here: ANN (type annotations aren't expected on test functions/fixtures) and
+# ARG (monkeypatch stubs/lambdas take `*a, **k` to match a real signature without using it). S101
+# allows bare `assert`, the backbone of the suite.
+"tests/**/*.py" = ["S101", "ANN", "ARG"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

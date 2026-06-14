@@ -405,17 +405,42 @@ setup_languagetool() {
   maybe_start "com.redraft.languagetool" "LanguageTool server"
 }
 
+# Pull a model after waiting (~12s) for an Ollama server to accept connections. `ollama pull` needs
+# a running daemon and a brew-only Ollama has none until we start ours, so callers must start the
+# server first. Verifies the model actually landed and warns with the exact recovery command.
+pull_ollama_model() {
+  local model="$1" i=0
+  while [ "$i" -lt 24 ]; do
+    curl -fsS "http://localhost:11434/api/tags" >/dev/null 2>&1 && break
+    sleep 0.5; i=$((i + 1))
+  done
+  bold "Pulling Ollama model '$model' (~2GB; first run only)..."
+  if ollama pull "$model" && ollama list 2>/dev/null | grep -q -F "$model"; then
+    info "Model '$model' is ready."
+  else
+    warn "Could not pull '$model'. Start the Ollama server (Redraft menu -> Start), then run:  ollama pull $model"
+  fi
+}
+
 setup_ollama() {
   local model="$1"
   if ! command -v ollama >/dev/null 2>&1; then
     brew_install "Ollama" "brew install ollama" "${REDRAFT_OLLAMA_INSTALL:-}" || warn "Ollama not installed."
   fi
   command -v ollama >/dev/null 2>&1 || { warn "Ollama unavailable; install it, then re-run to register the server."; return 1; }
-  if interactive && confirm "Pull model '$model' now?"; then
-    ollama pull "$model" || warn "Pull failed; run 'ollama pull $model' later."
-  fi
+  # Register + start the server BEFORE pulling: `ollama pull` talks to a running daemon, and a
+  # brew-only install has none until ours starts.
   write_agent "com.redraft.ollama" "$(command -v ollama)" serve
   maybe_start "com.redraft.ollama" "Ollama server"
+  # Improve is unusable without the model, so default to pulling it (Enter = yes).
+  if interactive; then
+    case "$(ask "Pull model '$model' now (required for Improve)? [Y/n] ")" in
+      [nN]*) warn "Skipped model pull; run 'ollama pull $model' before using Improve." ;;
+      *) pull_ollama_model "$model" ;;
+    esac
+  else
+    pull_ollama_model "$model"
+  fi
 }
 
 # --- Agent CLIs (Claude/Codex/Gemini/Copilot) ---------------------------------------------------
@@ -477,7 +502,7 @@ def sub(k):
 out = {
     "CUR_FIX": c.get("fixProvider", "embedded"),
     "CUR_IMPROVE": c.get("improveProvider", "none"),
-    "CUR_MODEL": sub("ollama").get("model", "llama3.1:8b"),
+    "CUR_MODEL": sub("ollama").get("model", "llama3.2:3b"),
     "CUR_FIXCMD": sub("command").get("fixCmd", ""),
     "CUR_IMPCMD": sub("command").get("improveCmd", ""),
     "CUR_AGENT": sub("agent").get("tool", "auto"),
@@ -490,7 +515,7 @@ PY
 configure_providers() {
   mkdir -p "$CFG_DIR"
   # Reuse the existing config as defaults on reinstall.
-  local CUR_FIX="embedded" CUR_IMPROVE="none" CUR_MODEL="llama3.1:8b" CUR_FIXCMD="" CUR_IMPCMD="" CUR_AGENT="auto"
+  local CUR_FIX="embedded" CUR_IMPROVE="none" CUR_MODEL="llama3.2:3b" CUR_FIXCMD="" CUR_IMPCMD="" CUR_AGENT="auto"
   eval "$(read_cfg)"
   local fix="$CUR_FIX" improve="$CUR_IMPROVE" model="$CUR_MODEL" fixcmd="$CUR_FIXCMD" impcmd="$CUR_IMPCMD"
   AGENT_TOOL="$CUR_AGENT"; AGENT_BIN=""

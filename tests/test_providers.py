@@ -3,7 +3,6 @@ import pytest
 from redraft.prompt import build_result, extract_json
 from redraft.providers import _shell, command
 
-
 # --- extract_json: must return the FIRST balanced object, string-aware -----------------------
 
 
@@ -43,13 +42,13 @@ def test_build_result_coerces_notes_and_flags():
 
 
 def test_command_per_mode_commands():
-    cfg = {"command": {"fixCmd": "printf '{\"revised\":\"FIX\"}'", "improveCmd": "printf '{\"revised\":\"IMP\"}'"}}
+    cfg = {"command": {"fixCmd": 'printf \'{"revised":"FIX"}\'', "improveCmd": 'printf \'{"revised":"IMP"}\''}}
     assert command.review("hi", "fix", cfg).revised == "FIX"
     assert command.review("hi", "improve", cfg).revised == "IMP"
 
 
 def test_command_falls_back_to_shared_cmd():
-    cfg = {"command": {"cmd": "printf '{\"revised\":\"SHARED\"}'"}}
+    cfg = {"command": {"cmd": 'printf \'{"revised":"SHARED"}\''}}
     assert command.review("hi", "fix", cfg).revised == "SHARED"
     assert command.review("hi", "improve", cfg).revised == "SHARED"
 

@@ -21,7 +21,7 @@ DEFAULTS: dict = {
     # curated typo map always runs. Set embedded.spell=true to opt into pyspellchecker (hardened,
     # but still a heuristic).
     "embedded": {"spell": False},
-    "ollama": {"url": "http://localhost:11434", "model": "llama3.1:8b"},
+    "ollama": {"url": "http://localhost:11434", "model": "llama3.2:3b"},
     "agent": {"tool": "auto", "timeoutMs": 120000},  # tool: auto|claude|codex|gemini|copilot
     "command": {"cmd": "", "timeoutMs": 60000},
     "languagetool": {"url": "http://localhost:8081", "language": "en-US"},

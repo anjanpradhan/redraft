@@ -7,6 +7,7 @@ command cannot corrupt protected spans.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
 import subprocess
@@ -49,14 +50,10 @@ def run(cmd: str, prompt: str, timeout_ms: int, source: str) -> ReviewResult:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(prompt)
         except Exception:
-            try:
+            with contextlib.suppress(OSError):
                 os.close(fd)
-            except OSError:
-                pass
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(prompt_path)
-            except OSError:
-                pass
             raise
         quoted = shlex.quote(prompt_path)
         run_cmd = run_cmd.replace("{prompt_file}", quoted)
@@ -99,10 +96,8 @@ def run(cmd: str, prompt: str, timeout_ms: int, source: str) -> ReviewResult:
         return result
     finally:
         if prompt_path:
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(prompt_path)
-            except OSError:
-                pass
 
 
 def _loads(json_str: str, source: str) -> object:

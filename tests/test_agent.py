@@ -4,7 +4,7 @@ from redraft.providers import agent
 
 
 @pytest.fixture(autouse=True)
-def _isolate(monkeypatch):
+def _isolate(monkeypatch) -> None:
     # Make resolution hermetic: ignore any real agent CLIs installed on the dev machine, so
     # only the explicit `agent.bins` hints in each test resolve. (Keeps real PATH for /bin/sh.)
     monkeypatch.setattr(agent, "_KNOWN_DIRS", [])
@@ -32,10 +32,15 @@ def test_resolve_bin_none_when_missing():
 
 def test_auto_honors_preference_order(tmp_path):
     # both gemini and claude available -> claude wins (earlier in PREFERENCE)
-    cfg = {"agent": {"tool": "auto", "bins": {
-        "gemini": _fake_agent(tmp_path, "gemini", "GEM"),
-        "claude": _fake_agent(tmp_path, "claude", "CLA"),
-    }}}
+    cfg = {
+        "agent": {
+            "tool": "auto",
+            "bins": {
+                "gemini": _fake_agent(tmp_path, "gemini", "GEM"),
+                "claude": _fake_agent(tmp_path, "claude", "CLA"),
+            },
+        }
+    }
     assert agent.review("hi", "improve", cfg).revised == "CLA"
 
 
