@@ -28,6 +28,7 @@ VENV_DIR="$DATA_DIR/venv"
 LAUNCHD_DIR="$DATA_DIR/launchd"   # on-demand agents (NOT ~/Library/LaunchAgents -> no login autostart)
 LOG_DIR="$DATA_DIR/logs"
 LT_DIR="$DATA_DIR/languagetool"
+MANIFEST="$DATA_DIR/install-manifest.tsv"   # what WE installed (LABEL<TAB>UNINSTALL_CMD), read by uninstall.sh
 LT_VERSION="6.6"
 LT_URL="https://languagetool.org/download/LanguageTool-$LT_VERSION.zip"
 CFG_DIR="$HOME/.config/redraft"
@@ -54,6 +55,30 @@ ask() {
 confirm() { case "$(ask "$1 [y/N] ")" in [yY]*) return 0;; *) return 1;; esac; }
 interactive() { [ -r /dev/tty ]; }
 
+# record_install LABEL INSTALL_CMD [UNINSTALL_CMD]
+# Append a dedup'd manifest line (LABEL<TAB>UNINSTALL_CMD) recording something WE installed, so
+# uninstall.sh can offer to remove only those. When UNINSTALL_CMD is omitted, derive it from a
+# recognized `brew install` command; a custom/non-brew install records an empty cmd (transparency
+# only — not auto-removable). The manifest lives under DATA_DIR so it survives the venv wipe.
+record_install() {
+  local label="$1" install_cmd="$2" uninstall="${3:-}"
+  if [ -z "$uninstall" ]; then
+    case "$install_cmd" in
+      "brew install --cask "*) uninstall="brew uninstall --cask ${install_cmd#brew install --cask }" ;;
+      "brew install "*)        uninstall="brew uninstall ${install_cmd#brew install }" ;;
+      *)                       uninstall="" ;;
+    esac
+  fi
+  mkdir -p "$DATA_DIR"
+  touch "$MANIFEST"
+  grep -q -F -x -e "$label	$uninstall" "$MANIFEST" 2>/dev/null && return 0
+  # Drop any prior line for this LABEL (cmd may have changed), then append the current one.
+  local tmp; tmp="$(mktemp)"
+  grep -v -F -e "$label	" "$MANIFEST" > "$tmp" 2>/dev/null || true
+  printf '%s\t%s\n' "$label" "$uninstall" >> "$tmp"
+  mv "$tmp" "$MANIFEST"
+}
+
 # brew_install LABEL DEFAULT_CMD [OVERRIDE] [required]
 # Runs a dependency-install command the user can replace. Precedence:
 #   - OVERRIDE non-empty (e.g. $REDRAFT_JAVA_INSTALL) -> run it (no prompt)
@@ -78,7 +103,8 @@ brew_install() {
   fi
   [ -n "$cmd" ] || { info "Skipped installing $label."; return 1; }
   bold "Installing $label: $cmd"
-  sh -c "$cmd"
+  sh -c "$cmd" || return 1
+  record_install "$label" "$cmd"
 }
 
 [ "$(uname -s)" = "Darwin" ] || die "Redraft is macOS-only."
@@ -89,15 +115,19 @@ ensure_brew() {
     [ -x "$p" ] && eval "$("$p" shellenv)" && return
   done
   warn "Homebrew is not installed."
+  local installed=""
   if [ -n "${REDRAFT_BREW_INSTALL:-}" ]; then
-    bold "Installing Homebrew: $REDRAFT_BREW_INSTALL"; sh -c "$REDRAFT_BREW_INSTALL"
+    bold "Installing Homebrew: $REDRAFT_BREW_INSTALL"; sh -c "$REDRAFT_BREW_INSTALL" && installed=1
   elif interactive && confirm "Install Homebrew now?"; then
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && installed=1
   fi
   for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do
     [ -x "$p" ] && eval "$("$p" shellenv)" && break
   done
   command -v brew >/dev/null 2>&1 || die "Homebrew is required. See https://brew.sh and re-run."
+  # Record only if WE installed it; uninstall offers the official uninstaller (removes ALL brew pkgs).
+  [ -n "$installed" ] && record_install "Homebrew" "" \
+    '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)"'
 }
 
 ensure_hammerspoon() {
@@ -207,6 +237,17 @@ offer_nlp() {
   else
     info "Skipped enhanced spelling (preserving existing config; new installs default to off)."
   fi
+}
+
+# Silently honor the existing embedded.spell setting without prompting (used by the reuse and
+# non-interactive paths). create_venv wipes the venv every run, so when spelling was enabled we
+# must reinstall pyspellchecker into the fresh venv; sets EMBEDDED_SPELL so merge_config persists it.
+restore_embedded_spell() {
+  [ "$(current_embedded_spell || true)" = "true" ] || return 0
+  bold "Restoring enhanced spelling..."
+  uv pip install --python "$VENV_DIR/bin/python" pyspellchecker \
+    && { EMBEDDED_SPELL="true"; info "Enhanced spelling reinstalled and enabled."; } \
+    || { EMBEDDED_SPELL="false"; warn "Could not reinstall pyspellchecker; embedded Fix uses the built-in typo map."; }
 }
 
 wire_init() {
@@ -455,13 +496,16 @@ configure_providers() {
   AGENT_TOOL="$CUR_AGENT"; AGENT_BIN=""
 
   # Quiet reinstall: when a config already exists, default to reusing it verbatim (Enter = reuse) —
-  # no provider prompts, no server (re)setup. merge_config is idempotent and preserves keys, and any
-  # launchd agents from the prior install stay registered (manage them from the menu). Type 'n' to
-  # re-pick providers interactively.
+  # this covers ALL prior choices, including enhanced spelling. Because create_venv wipes the venv,
+  # reuse reinstalls pyspellchecker if it was enabled and re-runs setup for any server-backed
+  # provider (LanguageTool/Ollama) so it's started again. Type 'n' to re-pick providers interactively.
   if interactive && [ -f "$CFG" ]; then
     case "$(ask "Reuse your last setup (Fix=$CUR_FIX, Improve=$CUR_IMPROVE)? [Y/n] ")" in
       [nN]*) ;;  # fall through to the interactive prompts below
-      *) info "Reusing your last setup (Fix=$fix, Improve=$improve) — no changes to providers."
+      *) info "Reusing your last setup (Fix=$fix, Improve=$improve)."
+         restore_embedded_spell
+         [ "$fix" = "languagetool" ] && { setup_languagetool || warn "LanguageTool setup incomplete; finish it later."; }
+         [ "$improve" = "ollama" ] && { setup_ollama "$model" || warn "Ollama setup incomplete; finish it later."; }
          merge_config "$fix" "$improve" "$model" "$fixcmd" "$impcmd" "${AGENT_TOOL:-auto}" "${AGENT_BIN:-}" "$EMBEDDED_SPELL"
          return 0 ;;
     esac
@@ -479,6 +523,9 @@ configure_providers() {
       *) fix="embedded" ;;
     esac
 
+    # Enhanced spelling (embedded Fix). Asked here so it's only prompted when NOT reusing.
+    offer_nlp
+
     local impdef=4; case "$CUR_IMPROVE" in ollama) impdef=1 ;; agent) impdef=2 ;; command) impdef=3 ;; esac
     info "Improve writing (Opt+Cmd+I):  1) Ollama local AI   2) Agent CLI (external/cloud-capable)   3) Custom command   4) Skip"
     ans="$(ask "Improve provider [1/2/3/4] (default $impdef): ")"; [ -n "$ans" ] || ans="$impdef"
@@ -493,6 +540,7 @@ configure_providers() {
     esac
   else
     info "Non-interactive: keeping existing configuration (Fix=$fix, Improve=$improve)."
+    restore_embedded_spell
   fi
   merge_config "$fix" "$improve" "$model" "$fixcmd" "$impcmd" "${AGENT_TOOL:-auto}" "${AGENT_BIN:-}" "$EMBEDDED_SPELL"
 }
@@ -610,7 +658,6 @@ ensure_uv
 resolve_source
 create_venv
 install_engine
-offer_nlp
 install_spoon
 wire_init
 configure_providers
