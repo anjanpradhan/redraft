@@ -2,24 +2,32 @@ return function()
   local M = {}
 
   local function appPid(app)
-    local ok, pid = pcall(function() return app and app:pid() end)
+    local ok, pid = pcall(function()
+      return app and app:pid()
+    end)
     return ok and pid or nil
   end
 
   local function windowId(win)
-    local ok, wid = pcall(function() return win and win:id() end)
+    local ok, wid = pcall(function()
+      return win and win:id()
+    end)
     return ok and wid or nil
   end
 
   local function focusedElement()
     if not (hs.uielement and hs.uielement.focusedElement) then return nil end
-    local ok, elem = pcall(function() return hs.uielement.focusedElement() end)
+    local ok, elem = pcall(function()
+      return hs.uielement.focusedElement()
+    end)
     return ok and elem or nil
   end
 
   local function attr(elem, name)
     if not elem then return nil end
-    local ok, value = pcall(function() return elem:attributeValue(name) end)
+    local ok, value = pcall(function()
+      return elem:attributeValue(name)
+    end)
     return ok and value or nil
   end
 
@@ -27,7 +35,9 @@ return function()
     if value == nil then return "" end
     if type(value) ~= "table" then return tostring(value) end
     local parts = {}
-    for k, v in pairs(value) do parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) end
+    for k, v in pairs(value) do
+      parts[#parts + 1] = tostring(k) .. "=" .. tostring(v)
+    end
     table.sort(parts)
     return table.concat(parts, ",")
   end
@@ -35,8 +45,15 @@ return function()
   local function elementSignature(elem)
     if not elem then return nil end
     local names = {
-      "AXRole", "AXSubrole", "AXIdentifier", "AXDOMIdentifier", "AXTitle",
-      "AXDescription", "AXPosition", "AXSize", "AXSelectedTextRange",
+      "AXRole",
+      "AXSubrole",
+      "AXIdentifier",
+      "AXDOMIdentifier",
+      "AXTitle",
+      "AXDescription",
+      "AXPosition",
+      "AXSize",
+      "AXSelectedTextRange",
     }
     local parts = {}
     local hasValue = false

@@ -1,10 +1,14 @@
 return function(obj, ctx)
-  local notify = function(...) return ctx.ui.notify(...) end
+  local notify = function(...)
+    return ctx.ui.notify(...)
+  end
 
   function obj:loadConfig()
     self.config = {}
     if hs.fs.attributes(ctx.CONFIG_PATH) then
-      local ok, data = pcall(function() return hs.json.read(ctx.CONFIG_PATH) end)
+      local ok, data = pcall(function()
+        return hs.json.read(ctx.CONFIG_PATH)
+      end)
       if ok and type(data) == "table" then self.config = data end
     end
     self.config.fixProvider = self.config.fixProvider or "embedded"

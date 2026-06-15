@@ -42,8 +42,22 @@ local ctx = {
   STYLE_LABELS = { friendly = "Slack — friendly", formal = "Email — formal" },
 
   SERVICES = {
-    languagetool = { label = "com.redraft.languagetool", name = "LanguageTool server" },
-    ollama = { label = "com.redraft.ollama", name = "Ollama server" },
+    languagetool = {
+      label = "com.redraft.languagetool",
+      name = "LanguageTool server",
+      configKey = "languagetool",
+      defaultURL = "http://localhost:8081",
+      healthPath = "/v2/languages",
+      bootTimeout = 45,
+    },
+    ollama = {
+      label = "com.redraft.ollama",
+      name = "Ollama server",
+      configKey = "ollama",
+      defaultURL = "http://localhost:11434",
+      healthPath = "/api/tags",
+      bootTimeout = 25,
+    },
   },
 
   author = obj.author,

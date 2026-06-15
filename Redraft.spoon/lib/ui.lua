@@ -12,7 +12,9 @@ return function(obj, ctx)
 
   local function send(fields, cat, onClick)
     if cat and _notif[cat] == false then return end
-    if _lastNotif then pcall(function() _lastNotif:withdraw() end) end
+    if _lastNotif then pcall(function()
+      _lastNotif:withdraw()
+    end) end
     fields.title = "Redraft"
     fields.withdrawAfter = 0
     _lastNotif = hs.notify.new(function(n)
@@ -27,7 +29,9 @@ return function(obj, ctx)
     local onClick
     if cat == "error" then
       obj._lastError = detail or text
-      onClick = function() obj:showText("Redraft — Error", obj._lastError) end
+      onClick = function()
+        obj:showText("Redraft — Error", obj._lastError)
+      end
     end
     send({ informativeText = text }, cat, onClick)
   end
@@ -43,39 +47,51 @@ return function(obj, ctx)
       body = "no changes needed"
     else
       local shown = {}
-      for i = 1, math.min(3, #notes) do shown[i] = tostring(notes[i]) end
+      for i = 1, math.min(3, #notes) do
+        shown[i] = tostring(notes[i])
+      end
       body = #notes .. ((#notes == 1) and " change: " or " changes: ") .. table.concat(shown, "; ")
       if #notes > 3 then body = body .. " …" end
     end
     if #flags > 0 then body = "⚠ " .. table.concat(flags, "; ") .. "  ·  " .. body end
 
-    send({ subTitle = subtitle, informativeText = body }, mode, function() obj:showResult() end)
+    send({ subTitle = subtitle, informativeText = body }, mode, function()
+      obj:showResult()
+    end)
   end
 
   local function htmlEscape(s)
-    return (tostring(s or "")
-      :gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
-      :gsub('"', "&quot;"):gsub("'", "&#39;"))
+    return (
+      tostring(s or ""):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"):gsub('"', "&quot;"):gsub("'", "&#39;")
+    )
   end
 
   local function listHtml(items)
     if type(items) ~= "table" or #items == 0 then return "" end
     local out = {}
-    for _, it in ipairs(items) do out[#out + 1] = "<li>" .. htmlEscape(it) .. "</li>" end
+    for _, it in ipairs(items) do
+      out[#out + 1] = "<li>" .. htmlEscape(it) .. "</li>"
+    end
     return "<ul>" .. table.concat(out) .. "</ul>"
   end
 
   local function copyBtn(id)
-    return "<button class=\"copy\" onclick=\"window.webkit.messageHandlers.redraft.postMessage("
-      .. "document.getElementById('" .. id .. "').value);this.textContent='Copied ✓';\">Copy</button>"
+    return '<button class="copy" onclick="window.webkit.messageHandlers.redraft.postMessage('
+      .. "document.getElementById('"
+      .. id
+      .. "').value);this.textContent='Copied ✓';\">Copy</button>"
   end
 
   local function field(label, id, text, cls, collapsed)
     local hdr = '<div class="fhdr"><span class="lbl">' .. label .. "</span>" .. copyBtn(id) .. "</div>"
-    local ta = '<textarea id="' .. id .. '" readonly class="' .. (cls or "small") .. '">' .. htmlEscape(text) .. "</textarea>"
-    if collapsed then
-      return "<details><summary>" .. label .. "</summary>" .. hdr .. ta .. "</details>"
-    end
+    local ta = '<textarea id="'
+      .. id
+      .. '" readonly class="'
+      .. (cls or "small")
+      .. '">'
+      .. htmlEscape(text)
+      .. "</textarea>"
+    if collapsed then return "<details><summary>" .. label .. "</summary>" .. hdr .. ta .. "</details>" end
     return '<div class="field">' .. hdr .. ta .. "</div>"
   end
 
@@ -115,8 +131,17 @@ return function(obj, ctx)
   </style>]]
 
   function obj:_openModal(title, bodyHtml)
-    if self._resultView then pcall(function() self._resultView:delete() end); self._resultView = nil end
-    local html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" .. MODAL_STYLE .. "</head><body>" .. bodyHtml .. "</body></html>"
+    if self._resultView then
+      pcall(function()
+        self._resultView:delete()
+      end)
+      self._resultView = nil
+    end
+    local html = '<!DOCTYPE html><html><head><meta charset="utf-8">'
+      .. MODAL_STYLE
+      .. "</head><body>"
+      .. bodyHtml
+      .. "</body></html>"
     local sf = hs.screen.mainScreen():frame()
     local w, h = 540, 380
     local rect = { x = sf.x + (sf.w - w) / 2, y = sf.y + (sf.h - h) / 3, w = w, h = h }
@@ -148,8 +173,10 @@ return function(obj, ctx)
     if not r then return M.notify("Redraft: no result yet", "status") end
     local outcome = (r.mode == "improve") and "Improved" or "Fixed"
     local p = {
-      ('<header><span class="badge">%s</span><span class="title">Redraft</span><span class="prov">%s</span></header>')
-        :format(htmlEscape(outcome), htmlEscape(r.provider or "?")),
+      ('<header><span class="badge">%s</span><span class="title">Redraft</span><span class="prov">%s</span></header>'):format(
+        htmlEscape(outcome),
+        htmlEscape(r.provider or "?")
+      ),
     }
     p[#p + 1] = field("Replaced with", "out", r.revised, "main")
     if type(r.risk_flags) == "table" and #r.risk_flags > 0 then
@@ -157,7 +184,8 @@ return function(obj, ctx)
     end
     if type(r.change_notes) == "table" and #r.change_notes > 0 then
       p[#p + 1] = '<div class="field"><div class="fhdr"><span class="lbl">Changes</span></div>'
-        .. listHtml(r.change_notes) .. "</div>"
+        .. listHtml(r.change_notes)
+        .. "</div>"
     end
     if r.raw and r.raw ~= "" then p[#p + 1] = field("Agent response", "raw", r.raw, "small") end
     if r.command then p[#p + 1] = field("Command", "cmd", r.command, "small", true) end
@@ -171,15 +199,13 @@ return function(obj, ctx)
   end
 
   function obj:showAbout()
-    local body = ('<header><span class="badge">About</span><span class="title">Redraft</span>'
-      .. '<span class="prov">v%s</span></header>'):format(htmlEscape(obj.version))
-      .. '<div class="field">'
-      .. "<p>Fix or improve selected text in any macOS input field — local-first. Select text, press "
-      .. "a hotkey, and the selection is replaced in place.</p>"
-      .. '<p class="h">Hotkeys</p><p>⌥⌘F — Fix only  ·  ⌥⌘I — Improve writing</p>'
-      .. ('<p class="muted">Thin Hammerspoon Spoon + local Python engine · %s · %s license</p>')
-        :format(htmlEscape(ctx.author or obj.author), htmlEscape(ctx.license or obj.license))
-      .. "</div>"
+    local body = (
+      '<header><span class="badge">About</span><span class="title">Redraft</span>'
+      .. '<span class="prov">v%s</span></header>'
+    ):format(htmlEscape(obj.version)) .. '<div class="field">' .. "<p>Fix or improve selected text in any macOS input field — local-first. Select text, press " .. "a hotkey, and the selection is replaced in place.</p>" .. '<p class="h">Hotkeys</p><p>⌥⌘F — Fix only  ·  ⌥⌘I — Improve writing</p>' .. ('<p class="muted">Thin Hammerspoon Spoon + local Python engine · %s · %s license</p>'):format(
+      htmlEscape(ctx.author or obj.author),
+      htmlEscape(ctx.license or obj.license)
+    ) .. "</div>"
     self:_openModal("About Redraft", body)
   end
 

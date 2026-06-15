@@ -253,6 +253,16 @@ echo 'i think teh `api` is definately down' | .venv/bin/redraft --mode fix --inp
 
 Engine source is `src/redraft/` (stdlib-only at runtime); tests in `tests/`.
 
+The Hammerspoon Spoon (`Redraft.spoon/`, Lua) has its own lint/format tools — install them once with
+`brew install luacheck stylua`. A `Makefile` wraps both languages behind one entry point:
+
+```bash
+make lua      # format (stylua) + lint (luacheck) the Spoon
+make py       # Python pre-commit suite (validates + autofixes)
+make check    # py + lua + pytest — the full gate
+make          # list all targets
+```
+
 ## Troubleshooting
 
 Redraft posts status, success, and errors to **macOS Notification Center** (title "Redraft"); each

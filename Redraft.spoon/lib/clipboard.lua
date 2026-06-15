@@ -4,7 +4,9 @@ return function(ctx)
   local function copyTable(t)
     if type(t) ~= "table" then return nil end
     local out = {}
-    for k, v in pairs(t) do out[k] = v end
+    for k, v in pairs(t) do
+      out[k] = v
+    end
     return out
   end
 

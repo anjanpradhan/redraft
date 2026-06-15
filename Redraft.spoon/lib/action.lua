@@ -9,7 +9,10 @@ return function(obj, ctx)
     if not a then return nil end
     local b
     for i = #s, a, -1 do
-      if s:sub(i, i) == "}" then b = i; break end
+      if s:sub(i, i) == "}" then
+        b = i
+        break
+      end
     end
     if not b then return nil end
     local ok, data = pcall(hs.json.decode, s:sub(a, b))
@@ -29,9 +32,7 @@ return function(obj, ctx)
     hs.eventtap.keyStroke({ "cmd" }, "c", 0)
 
     hs.timer.doAfter(ctx.SETTLE, function()
-      if hs.pasteboard.changeCount() == before then
-        return ui.notify("Redraft: nothing selected", "error")
-      end
+      if hs.pasteboard.changeCount() == before then return ui.notify("Redraft: nothing selected", "error") end
       local text = hs.pasteboard.getContents()
       if not text or text == "" then
         clipboard.restore(saved)
@@ -47,11 +48,15 @@ return function(obj, ctx)
         return ui.notify("Redraft: temp file error", "error")
       end
       clipboard.chmod("600", infile)
-      fh:write(text); fh:close()
+      fh:write(text)
+      fh:close()
 
       local bundle = frontApp and frontApp:bundleID()
       local engineArgs = { "-m", "redraft", "--mode", mode, "--input", infile }
-      if bundle and bundle ~= "" then engineArgs[#engineArgs + 1] = "--app"; engineArgs[#engineArgs + 1] = bundle end
+      if bundle and bundle ~= "" then
+        engineArgs[#engineArgs + 1] = "--app"
+        engineArgs[#engineArgs + 1] = bundle
+      end
 
       self._tasks = self._tasks or {}
       local task
@@ -76,9 +81,14 @@ return function(obj, ctx)
         end
 
         self._lastResult = {
-          revised = data.revised, change_notes = data.change_notes,
-          risk_flags = data.risk_flags, mode = mode, provider = data.provider,
-          command = data.command, prompt = data.prompt, raw = data.raw,
+          revised = data.revised,
+          change_notes = data.change_notes,
+          risk_flags = data.risk_flags,
+          mode = mode,
+          provider = data.provider,
+          command = data.command,
+          prompt = data.prompt,
+          raw = data.raw,
         }
         clipboard.setTextQuiet(data.revised)
         hs.eventtap.keyStroke({ "cmd" }, "v", 0)
