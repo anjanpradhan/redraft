@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from redraft import cli
 
 
@@ -7,6 +9,12 @@ def _run(capsys, argv):
     rc = cli.main(argv)
     out = capsys.readouterr().out
     return rc, json.loads(out)
+
+
+@pytest.fixture(autouse=True)
+def isolated_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    (tmp_path / "redraft").mkdir()
 
 
 def test_fix_via_input_file(tmp_path, capsys):

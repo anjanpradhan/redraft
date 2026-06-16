@@ -128,6 +128,78 @@ def test_provider_passthrough_ok():
         assert out["change_notes"] == ["noop"]
 
 
+def test_llm_provider_gets_real_line_breaks_and_restores():
+    text = "Of course.\nAnyway, I'm not doing anything in the coming sprint."
+    seen: dict[str, str] = {}
+
+    def fake_review(projection: str, _mode: str, _config: dict) -> ReviewResult:
+        seen["projection"] = projection
+        return ReviewResult(revised=projection, prompt="sent")
+
+    fake = types.SimpleNamespace(__name__="redraft.providers.agent", review=fake_review)
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert seen["projection"] == text
+    assert out["revised"] == text
+
+
+def test_llm_provider_cannot_drop_multiline_tail_silently():
+    text = "Of course.\nAnyway, I'm not doing anything in the coming sprint."
+
+    def fake_review(_projection: str, _mode: str, _config: dict) -> ReviewResult:
+        return ReviewResult(revised="Of course.", prompt="sent")
+
+    fake = types.SimpleNamespace(__name__="redraft.providers.agent", review=fake_review)
+    with mock.patch("redraft.engine.pick_provider", return_value=fake), pytest.raises(RuntimeError, match="multiline"):
+        review(text, "improve", {})
+
+
+def test_llm_provider_can_collapse_line_break_when_content_survives():
+    text = "Of course.\nAnyway, I'm not doing anything in the coming sprint."
+    revised = "Of course. Anyway, I'm not doing anything in the coming sprint."
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == revised
+
+
+def test_llm_provider_can_rephrase_multiline_tail_when_content_survives():
+    text = "Of course.\nAnyway, I'm not doing anything in the coming sprint."
+    revised = "Sure. I won't be involved in the sprint."
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == revised
+
+
+def test_llm_provider_retries_multiline_tail_drop_once():
+    text = "Of course.\nAnyway, I'm not doing anything in the coming sprint."
+    calls = {"n": 0}
+
+    def fake_review(projection: str, _mode: str, _config: dict) -> ReviewResult:
+        calls["n"] += 1
+        revised = "Of course." if calls["n"] == 1 else projection
+        return ReviewResult(revised=revised, prompt="sent")
+
+    fake = types.SimpleNamespace(__name__="redraft.providers.agent", review=fake_review)
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert calls["n"] == 2
+    assert out["revised"] == text
+
+
 def test_improve_does_not_prefix_by_default():
     seen: dict[str, str] = {}
 
