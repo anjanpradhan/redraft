@@ -4,6 +4,7 @@ Rules:
 - Return a revised version of the entire MESSAGE, not a summary.
 - Every non-empty input line is required content. Do not omit any input line's meaning, even if it starts with filler like "Anyway".
 - Preserve line/paragraph breaks unless combining lines improves flow; if you combine lines, keep the content of every line.
+- When preserving line breaks in JSON, encode them once as newline escapes; do not put literal \n text in revised.
 - Preserve every {{R:n}} token EXACTLY — same ids, same count, invent none.
 - Do NOT add or invent facts, names, numbers, dates, owners, or commitments.
 - Fix typos, spelling, grammar, and tense. Prefer the most likely correction for obvious typos.

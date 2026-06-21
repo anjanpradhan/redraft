@@ -20,33 +20,75 @@ return function(obj, ctx)
     return nil
   end
 
+  function obj:cancelActiveRedraft()
+    local run = self._activeRun
+    if not run then return end
+    self._activeRun = nil
+    if run.task then
+      if self._tasks then self._tasks[run.task] = nil end
+      pcall(function()
+        local ok, running = pcall(function()
+          return run.task:isRunning()
+        end)
+        if (not ok) or running then run.task:terminate() end
+      end)
+    end
+    if run.infile then
+      os.remove(run.infile)
+      run.infile = nil
+    end
+    if run.saved then clipboard.restore(run.saved) end
+    self:stopSpinner()
+  end
+
   function obj:redraft(mode)
     if not self.enabled then return end
+    if self._activeRun then return ui.notify("Redraft: already working", "status") end
     if not hs.fs.attributes(ctx.VENV_PY) then
       return ui.notify("Redraft: engine not installed — run install.sh", "error")
     end
+    local run = {}
+    self._activeRun = run
+    local function current()
+      return self._activeRun == run
+    end
+    local function clearRun()
+      if current() then self._activeRun = nil end
+    end
+    local function cleanupFile()
+      if run.infile then
+        os.remove(run.infile)
+        run.infile = nil
+      end
+    end
+    local function fail(message, detail)
+      cleanupFile()
+      clipboard.restore(run.saved)
+      clearRun()
+      return ui.notify(message, "error", detail)
+    end
     local saved = clipboard.snapshot()
+    run.saved = saved
     local before = hs.pasteboard.changeCount()
     local frontApp = hs.application.frontmostApplication()
     local focusSnapshot = focus.snapshot(frontApp)
     hs.eventtap.keyStroke({ "cmd" }, "c", 0)
 
     hs.timer.doAfter(ctx.SETTLE, function()
-      if hs.pasteboard.changeCount() == before then return ui.notify("Redraft: nothing selected", "error") end
-      local text = hs.pasteboard.getContents()
-      if not text or text == "" then
-        clipboard.restore(saved)
-        return ui.notify("Redraft: empty selection", "error")
+      if not current() or not self.enabled then return end
+      if hs.pasteboard.changeCount() == before then
+        clearRun()
+        return ui.notify("Redraft: nothing selected", "error")
       end
+      local text = hs.pasteboard.getContents()
+      if not text or text == "" then return fail("Redraft: empty selection") end
 
       clipboard.setTextQuiet("")
       clipboard.ensurePrivateTmpDir()
       local infile = ctx.TMP_DIR .. "/sel-" .. hs.host.uuid()
+      run.infile = infile
       local fh = io.open(infile, "w")
-      if not fh then
-        clipboard.restore(saved)
-        return ui.notify("Redraft: temp file error", "error")
-      end
+      if not fh then return fail("Redraft: temp file error") end
       clipboard.chmod("600", infile)
       fh:write(text)
       fh:close()
@@ -62,22 +104,23 @@ return function(obj, ctx)
       local task
       task = hs.task.new(ctx.VENV_PY, function(code, stdout, stderr)
         self._tasks[task] = nil
+        if not current() then
+          cleanupFile()
+          return
+        end
         self:stopSpinner()
-        os.remove(infile)
+        cleanupFile()
         local data = decodeJson(stdout)
         if type(data) ~= "table" then
-          clipboard.restore(saved)
           local full = (stderr and #stderr > 0) and stderr or ("no output, exit " .. tostring(code))
-          return ui.notify("Redraft: engine error — " .. full:sub(1, 160), "error", full)
+          return fail("Redraft: engine error — " .. full:sub(1, 160), full)
         end
         if data.error or type(data.revised) ~= "string" then
-          clipboard.restore(saved)
           local full = tostring(data.error or "no result")
-          return ui.notify("Redraft: " .. full:sub(1, 160), "error", full)
+          return fail("Redraft: " .. full:sub(1, 160), full)
         end
         if not focus.stillCurrent(focusSnapshot) then
-          clipboard.restore(saved)
-          return ui.notify("Redraft: focus changed — skipped (your text is unchanged)", "error")
+          return fail("Redraft: focus changed — skipped (your text is unchanged)")
         end
 
         self._lastResult = {
@@ -93,24 +136,22 @@ return function(obj, ctx)
         clipboard.setTextQuiet(data.revised)
         hs.eventtap.keyStroke({ "cmd" }, "v", 0)
         hs.timer.doAfter(ctx.SETTLE, function()
+          if not current() then return end
           clipboard.restore(saved)
+          clearRun()
           ui.notifyResult(data, mode)
         end)
       end, engineArgs)
 
-      if not task then
-        os.remove(infile)
-        clipboard.restore(saved)
-        return ui.notify("Redraft: could not create task", "error")
-      end
+      if not task then return fail("Redraft: could not create task") end
+      run.task = task
       self._tasks[task] = true
       if mode == "improve" then self:startSpinner() end
       if not task:start() then
         self._tasks[task] = nil
+        run.task = nil
         self:stopSpinner()
-        os.remove(infile)
-        clipboard.restore(saved)
-        ui.notify("Redraft: could not launch engine — check " .. ctx.VENV_PY, "error")
+        fail("Redraft: could not launch engine — check " .. ctx.VENV_PY)
       end
     end)
   end

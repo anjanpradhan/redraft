@@ -90,6 +90,10 @@ def test_protects_paths():
     ]
 
 
+def test_protects_api_paths():
+    assert _protected("POST /v1/foo") == ["/v1/foo"]
+
+
 def test_path_drops_trailing_sentence_period():
     # A path ending a sentence keeps its internal dots but releases the terminal period to the prose,
     # so sentence capitalization downstream still sees the boundary.

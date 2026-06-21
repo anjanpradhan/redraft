@@ -278,7 +278,7 @@ return function(obj, ctx)
     self.enabled = true
     self:refreshMenu()
     -- Once per Hammerspoon session (a true launch): bring selected backends up to a healthy state.
-    -- hs.reload() rebuilds the Lua VM so the flag resets; config reload / menu Restart don't call start().
+    -- hs.reload() rebuilds the Lua VM so the flag resets; menu Restart also checks explicitly below.
     if not self._bootChecked then
       self._bootChecked = true
       self:ensureSelectedServices()
@@ -287,6 +287,7 @@ return function(obj, ctx)
   end
 
   function obj:stop()
+    self:cancelActiveRedraft()
     self:unbindHotkeys()
     self.enabled = false
     self:refreshMenu()
@@ -294,16 +295,19 @@ return function(obj, ctx)
   end
 
   function obj:restart()
+    self:cancelActiveRedraft()
     self:unbindHotkeys()
     self:loadConfig()
     self:bindHotkeys()
     self.enabled = true
     self:refreshMenu()
+    self:ensureSelectedServices()
     notify("Redraft: restarted")
     return self
   end
 
   function obj:quit()
+    self:cancelActiveRedraft()
     self:unbindHotkeys()
     self.enabled = false
     if self._spinnerTimer then

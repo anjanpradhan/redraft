@@ -9,8 +9,9 @@ and the text left untouched.
 Every auto-protected span is **sigil-anchored** (a backtick, ``http``, ``@…\\.`` shape, ``$``, a
 leading ``./``/``../``/``~/`` or a multi-segment ``/abs/path``, a ``v``-prefix or 3+ dotted parts,
 ``@``/``#``) so ordinary prose is never swept up — e.g. ``and/or``, ``12/25/2024``, ``3.14`` and a
-markdown ``# Heading`` are left alone. Other unformatted plaintext (``p95``, ``POST /v1/foo``) is
-NOT auto-protected; wrap it in backticks to protect it.
+markdown ``# Heading`` are left alone. API-style paths such as ``/v1/foo`` are protected as paths;
+other unformatted plaintext identifiers (``p95``, bare HTTP verbs like ``POST``) are NOT
+auto-protected; wrap them in backticks to protect them.
 """
 
 from __future__ import annotations

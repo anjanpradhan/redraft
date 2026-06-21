@@ -52,8 +52,9 @@ The engine auto-protects high-signal technical spans — `` `code` ``, [markdown
 emails, `$ENV` vars, file paths (`./x`, `~/x`, `/a/b`), version strings (`v1.2.3`), `@mentions`,
 and `#channels` — behind a token invariant; if a provider can't preserve them the change is
 **refused** and your text is left untouched. The patterns are sigil-anchored so ordinary prose
-(`and/or`, `12/25/2024`, `3.14`, a markdown `# Heading`) is never swept up; other plaintext
-(`p95`, `POST /v1/foo`) isn't auto-protected — wrap it in backticks. No server/daemon — the engine
+(`and/or`, `12/25/2024`, `3.14`, a markdown `# Heading`) is never swept up. API-style paths
+(`/v1/foo`) are protected as paths; other plaintext identifiers (`p95`, bare `POST`) aren't
+auto-protected — wrap them in backticks. No server/daemon — the engine
 runs as a short-lived subprocess per keystroke.
 
 ## Providers (pick per mode, from the menu or config)

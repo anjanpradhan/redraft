@@ -103,8 +103,9 @@ CLI-shelling providers
 mode-0600 `{prompt_file}`; `{prompt_arg}` is the explicit argv fallback → JSON → validated result);
 selection is `pick_provider` (`providers/__init__.py`) and enforces each provider's supported
 modes. Adding a provider = one
-module + one registry line. Unformatted
-technical plaintext (`p95`, `POST /v1/foo`) is *not* auto-protected — wrap it in backticks.
+module + one registry line. Unformatted technical plaintext identifiers (`p95`, bare HTTP verbs like
+`POST`) are *not* auto-protected — wrap them in backticks. API-style paths such as `/v1/foo` are
+protected by the path rule.
 
 ## Trigger & menu-bar (Spoon)
 

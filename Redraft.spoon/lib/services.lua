@@ -139,14 +139,26 @@ return function(obj, ctx)
   -- On launch, bring the *selected* backends up to a healthy state. A backend already serving is
   -- left untouched (silent no-op); only a down/unhealthy one is (re)started, which then waits on health.
   function obj:ensureSelectedServices()
-    local function check(kind, provider)
-      if self.config[kind .. "Provider"] ~= provider or not M.plist(provider) then return end
+    local function providerInUse(provider)
+      if self.config.fixProvider == provider or self.config.improveProvider == provider then return true end
+      local profiles = self.config.profiles
+      if type(profiles) ~= "table" then return false end
+      for _, profile in pairs(profiles) do
+        if type(profile) == "table" and (profile.fixProvider == provider or profile.improveProvider == provider) then
+          return true
+        end
+      end
+      return false
+    end
+
+    local function check(provider)
+      if not providerInUse(provider) or not M.plist(provider) then return end
       M.checkHealth(provider, function(ok)
         if not ok then self:serviceControl(provider, "start") end
       end)
     end
-    check("fix", "languagetool")
-    check("improve", "ollama")
+    check("languagetool")
+    check("ollama")
   end
 
   return M

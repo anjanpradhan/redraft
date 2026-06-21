@@ -17,7 +17,7 @@
 # the matching env var to run non-interactively, e.g. REDRAFT_JAVA_INSTALL="brew install --cask temurin".
 set -euo pipefail
 
-REDRAFT_GIT="${REDRAFT_GIT:-https://github.com/your-org/redraft.git}"
+REDRAFT_GIT="${REDRAFT_GIT:-}"
 
 HS_DIR="$HOME/.hammerspoon"
 SPOONS_DIR="$HS_DIR/Spoons"
@@ -52,8 +52,26 @@ ask() {
   if [ -r /dev/tty ]; then printf '%s' "$prompt" >/dev/tty; read -r ans </dev/tty || true; fi
   printf '%s' "$ans"
 }
-confirm() { case "$(ask "$1 [y/N] ")" in [yY]*) return 0;; *) return 1;; esac; }
 interactive() { [ -r /dev/tty ]; }
+
+yes_no() {
+  local prompt="$1" default="${2:-n}" ans suffix
+  case "$default" in
+    y | Y | yes | YES) default="y"; suffix="[Y/n]" ;;
+    *)                 default="n"; suffix="[y/N]" ;;
+  esac
+  if ! interactive; then
+    [ "$default" = "y" ]
+    return
+  fi
+  ans="$(ask "$prompt $suffix ")"
+  case "$ans" in
+    y | Y | yes | YES) return 0 ;;
+    n | N | no | NO)   return 1 ;;
+    "")                [ "$default" = "y" ]; return ;;
+    *)                 warn "Unrecognized answer '$ans'; using default '$default'."; [ "$default" = "y" ]; return ;;
+  esac
+}
 
 # record_install LABEL INSTALL_CMD [UNINSTALL_CMD]
 # Append a dedup'd manifest line (LABEL<TAB>UNINSTALL_CMD) recording something WE installed, so
@@ -118,7 +136,7 @@ ensure_brew() {
   local installed=""
   if [ -n "${REDRAFT_BREW_INSTALL:-}" ]; then
     bold "Installing Homebrew: $REDRAFT_BREW_INSTALL"; sh -c "$REDRAFT_BREW_INSTALL" && installed=1
-  elif interactive && confirm "Install Homebrew now?"; then
+  elif interactive && yes_no "Install Homebrew now? (required)" y; then
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && installed=1
   fi
   for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do
@@ -148,6 +166,7 @@ resolve_source() {
   if [ -n "$dir" ] && [ -f "$dir/pyproject.toml" ] && [ -d "$dir/Redraft.spoon" ]; then
     SRC_ROOT="$dir"; info "Source: local checkout ($dir)"
   else
+    [ -n "$REDRAFT_GIT" ] || die "remote install is not configured yet; run install.sh from a local checkout or set REDRAFT_GIT."
     command -v git >/dev/null 2>&1 \
       || brew_install "git" "brew install git" "${REDRAFT_GIT_INSTALL:-}" required \
       || die "git is required for remote install."
@@ -215,16 +234,13 @@ PY
 offer_nlp() {
   local current choice=""
   current="$(current_embedded_spell || true)"
-  if interactive; then
-    local prompt="Install enhanced spelling (pyspellchecker, ~7MB)? [y/N] "
-    [ "$current" = "true" ] && prompt="Install enhanced spelling (pyspellchecker, ~7MB)? [Y/n] "
-    case "$(ask "$prompt")" in
-      [yY]*) choice="y" ;;
-      [nN]*) choice="n" ;;
-      *) [ "$current" = "true" ] && choice="y" ;;
-    esac
-  elif [ "$current" = "true" ]; then
+  if [ "$current" = "true" ]; then
+    yes_no "Enhanced spelling is enabled in config; reinstall pyspellchecker into the fresh venv?" y \
+      && choice="y" || choice="n"
+  elif yes_no "Install enhanced spelling (pyspellchecker, ~7MB)? (optional)" n; then
     choice="y"
+  else
+    choice="n"
   fi
   if [ "$choice" = "y" ]; then
     bold "Installing enhanced spelling..."
@@ -363,17 +379,38 @@ PY
 }
 
 # Offer to bootstrap an agent now (on demand). It will NOT auto-start at login.
+http_ok() {
+  local url="$1"
+  curl -fsS --max-time 2 "$url" >/dev/null 2>&1
+}
+
+launchd_loaded() {
+  local label="$1" uid; uid="$(id -u)"
+  launchctl print "gui/$uid/$label" >/dev/null 2>&1
+}
+
 maybe_start() {
-  local label="$1" name="$2" uid; uid="$(id -u)"
-  if interactive && confirm "Start $name now?"; then
+  local label="$1" name="$2" health_url="${3:-}" uid prompt; uid="$(id -u)"
+  if [ -n "$health_url" ] && http_ok "$health_url"; then
+    info "$name already running and healthy; skipping start."
+    return 0
+  fi
+  if launchd_loaded "$label"; then
+    prompt="$name is loaded but not healthy; restart now? (needed for selected provider)"
+  else
+    prompt="Start $name now? (needed for selected provider)"
+  fi
+  if yes_no "$prompt" y; then
     launchctl bootout "gui/$uid/$label" >/dev/null 2>&1 || true
     if launchctl bootstrap "gui/$uid" "$LAUNCHD_DIR/$label.plist" 2>/dev/null; then
-      info "$name started (on demand; will not auto-start at login)."
+      info "$name start requested (on demand; will not auto-start at login)."
     else
       warn "Could not start $name now; start it from the Redraft menu."
+      return 1
     fi
   else
-    info "$name registered; start it from the Redraft menu (or re-run) when needed."
+    info "$name registered; start it from the Redraft menu when needed."
+    return 1
   fi
 }
 
@@ -402,23 +439,59 @@ setup_languagetool() {
   # No --allow-origin: Redraft calls LanguageTool server-side (urllib), so CORS isn't needed; '*'
   # would let any local web page POST to the server.
   write_agent "com.redraft.languagetool" "$java" -cp "$jar" org.languagetool.server.HTTPServer --port 8081
-  maybe_start "com.redraft.languagetool" "LanguageTool server"
+  maybe_start "com.redraft.languagetool" "LanguageTool server" "http://localhost:8081/v2/languages"
+}
+
+wait_ollama() {
+  local i=0
+  while [ "$i" -lt 24 ]; do
+    curl -fsS "http://localhost:11434/api/tags" >/dev/null 2>&1 && break
+    sleep 0.5; i=$((i + 1))
+  done
+  curl -fsS "http://localhost:11434/api/tags" >/dev/null 2>&1
+}
+
+ollama_model_present() {
+  local model="$1"
+  command -v ollama >/dev/null 2>&1 || return 1
+  ollama list 2>/dev/null | awk 'NR > 1 {print $1}' | grep -F -x -q "$model"
 }
 
 # Pull a model after waiting (~12s) for an Ollama server to accept connections. `ollama pull` needs
 # a running daemon and a brew-only Ollama has none until we start ours, so callers must start the
 # server first. Verifies the model actually landed and warns with the exact recovery command.
 pull_ollama_model() {
-  local model="$1" i=0
-  while [ "$i" -lt 24 ]; do
-    curl -fsS "http://localhost:11434/api/tags" >/dev/null 2>&1 && break
-    sleep 0.5; i=$((i + 1))
-  done
+  local model="$1"
+  if ! wait_ollama; then
+    warn "Ollama server is not reachable; skipping model pull. Start it from the Redraft menu, then run:  ollama pull $model"
+    return 1
+  fi
+  if ollama_model_present "$model"; then
+    info "Ollama model '$model' is already present; skipping pull."
+    return 0
+  fi
   bold "Pulling Ollama model '$model' (~2GB; first run only)..."
-  if ollama pull "$model" && ollama list 2>/dev/null | grep -q -F "$model"; then
+  if ollama pull "$model" && ollama_model_present "$model"; then
     info "Model '$model' is ready."
   else
     warn "Could not pull '$model'. Start the Ollama server (Redraft menu -> Start), then run:  ollama pull $model"
+  fi
+}
+
+maybe_pull_ollama_model() {
+  local model="$1"
+  if ! wait_ollama; then
+    warn "Ollama server is not reachable; skipping model check. Start it from the Redraft menu, then run:  ollama pull $model"
+    return 1
+  fi
+  if ollama_model_present "$model"; then
+    info "Ollama model '$model' is already present; skipping pull."
+    return 0
+  fi
+  if yes_no "Pull Ollama model '$model' now? (missing; required for Improve)" y; then
+    pull_ollama_model "$model"
+  else
+    warn "Skipped model pull; run 'ollama pull $model' before using Improve."
   fi
 }
 
@@ -431,16 +504,8 @@ setup_ollama() {
   # Register + start the server BEFORE pulling: `ollama pull` talks to a running daemon, and a
   # brew-only install has none until ours starts.
   write_agent "com.redraft.ollama" "$(command -v ollama)" serve
-  maybe_start "com.redraft.ollama" "Ollama server"
-  # Improve is unusable without the model, so default to pulling it (Enter = yes).
-  if interactive; then
-    case "$(ask "Pull model '$model' now (required for Improve)? [Y/n] ")" in
-      [nN]*) warn "Skipped model pull; run 'ollama pull $model' before using Improve." ;;
-      *) pull_ollama_model "$model" ;;
-    esac
-  else
-    pull_ollama_model "$model"
-  fi
+  maybe_start "com.redraft.ollama" "Ollama server" "http://localhost:11434/api/tags" || true
+  maybe_pull_ollama_model "$model"
 }
 
 # --- Agent CLIs (Claude/Codex/Gemini/Copilot) ---------------------------------------------------
@@ -525,15 +590,14 @@ configure_providers() {
   # reuse reinstalls pyspellchecker if it was enabled and re-runs setup for any server-backed
   # provider (LanguageTool/Ollama) so it's started again. Type 'n' to re-pick providers interactively.
   if interactive && [ -f "$CFG" ]; then
-    case "$(ask "Reuse your last setup (Fix=$CUR_FIX, Improve=$CUR_IMPROVE)? [Y/n] ")" in
-      [nN]*) ;;  # fall through to the interactive prompts below
-      *) info "Reusing your last setup (Fix=$fix, Improve=$improve)."
-         restore_embedded_spell
-         [ "$fix" = "languagetool" ] && { setup_languagetool || warn "LanguageTool setup incomplete; finish it later."; }
-         [ "$improve" = "ollama" ] && { setup_ollama "$model" || warn "Ollama setup incomplete; finish it later."; }
-         merge_config "$fix" "$improve" "$model" "$fixcmd" "$impcmd" "${AGENT_TOOL:-auto}" "${AGENT_BIN:-}" "$EMBEDDED_SPELL"
-         return 0 ;;
-    esac
+    if yes_no "Reuse your last setup (Fix=$CUR_FIX, Improve=$CUR_IMPROVE)?" y; then
+      info "Reusing your last setup (Fix=$fix, Improve=$improve)."
+      restore_embedded_spell
+      [ "$fix" = "languagetool" ] && { setup_languagetool || warn "LanguageTool setup incomplete; finish it later."; }
+      [ "$improve" = "ollama" ] && { setup_ollama "$model" || warn "Ollama setup incomplete; finish it later."; }
+      merge_config "$fix" "$improve" "$model" "$fixcmd" "$impcmd" "${AGENT_TOOL:-auto}" "${AGENT_BIN:-}" "$EMBEDDED_SPELL"
+      return 0
+    fi
   fi
 
   if interactive; then
@@ -559,7 +623,7 @@ configure_providers() {
          local m; m="$(ask "Ollama model [$CUR_MODEL]: ")"; model="${m:-$CUR_MODEL}"
          setup_ollama "$model" || warn "Ollama setup incomplete; finish it later." ;;
       2) warn "Agent CLIs may send selected text to their provider/cloud account. Use only for text you can share with that tool."
-         confirm "Use Agent CLI for Improve?" && { improve="agent"; setup_agent "$CUR_AGENT"; } || improve="none" ;;
+         yes_no "Use Agent CLI for Improve? (external/cloud-capable opt-in)" n && { improve="agent"; setup_agent "$CUR_AGENT"; } || improve="none" ;;
       3) improve="command"; local ic; ic="$(ask "Improve command [${CUR_IMPCMD:-none}]: ")"; impcmd="${ic:-$CUR_IMPCMD}" ;;
       *) improve="none" ;;
     esac

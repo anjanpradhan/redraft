@@ -81,3 +81,41 @@ def test_languagetool_applies_replacement(monkeypatch):
     body = json.dumps({"matches": [{"offset": 0, "length": 3, "replacements": [{"value": "The"}]}]})
     _urlopen(monkeypatch, lambda *a, **k: _Resp(body))
     assert languagetool.review("teh cat", "fix", {}).revised == "The cat"
+
+
+def test_languagetool_skips_overlapping_replacements(monkeypatch):
+    body = json.dumps(
+        {
+            "matches": [
+                {"offset": 0, "length": 2, "replacements": [{"value": "X"}]},
+                {"offset": 1, "length": 2, "replacements": [{"value": "Y"}]},
+            ]
+        }
+    )
+    _urlopen(monkeypatch, lambda *a, **k: _Resp(body))
+    assert languagetool.review("abc", "fix", {}).revised == "Xc"
+
+
+def test_languagetool_applies_adjacent_replacements(monkeypatch):
+    body = json.dumps(
+        {
+            "matches": [
+                {"offset": 0, "length": 3, "replacements": [{"value": "The"}]},
+                {"offset": 4, "length": 3, "replacements": [{"value": "dog"}]},
+            ]
+        }
+    )
+    _urlopen(monkeypatch, lambda *a, **k: _Resp(body))
+    assert languagetool.review("teh cat", "fix", {}).revised == "The dog"
+
+
+def test_languagetool_skips_token_overlaps(monkeypatch):
+    body = json.dumps({"matches": [{"offset": 4, "length": 7, "replacements": [{"value": "TOKEN"}]}]})
+    _urlopen(monkeypatch, lambda *a, **k: _Resp(body))
+    assert languagetool.review("bad {{R:0}} text", "fix", {}).revised == "bad {{R:0}} text"
+
+
+def test_languagetool_offsets_are_utf16_units(monkeypatch):
+    body = json.dumps({"matches": [{"offset": 3, "length": 3, "replacements": [{"value": "the"}]}]})
+    _urlopen(monkeypatch, lambda *a, **k: _Resp(body))
+    assert languagetool.review("😀 teh", "fix", {}).revised == "😀 the"

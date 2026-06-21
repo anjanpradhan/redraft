@@ -200,6 +200,46 @@ def test_llm_provider_retries_multiline_tail_drop_once():
     assert out["revised"] == text
 
 
+def test_llm_provider_literal_escaped_newlines_become_real_newlines():
+    text = "use recs-platform when was npp last refreshed?\nuse recs-platform why is the badge missing?"
+    revised = "Use recs-platform when was npp last refreshed?\\nUse recs-platform why is the badge missing?"
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == revised.replace("\\n", "\n")
+
+
+def test_llm_provider_restores_original_paragraph_separators_when_line_count_matches():
+    text = (
+        "use recs-platform when was npp last refreshed?\n"
+        "use recs-platform why is the badge missing?\n\n"
+        "use recs-platform where are FBT recommendations dropped?"
+    )
+    revised = (
+        "Use recs-platform when was npp last refreshed?\\n"
+        "Use recs-platform why is the badge missing?\\n"
+        "Use recs-platform where are FBT recommendations dropped?"
+    )
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == (
+        "Use recs-platform when was npp last refreshed?\n"
+        "Use recs-platform why is the badge missing?\n\n"
+        "Use recs-platform where are FBT recommendations dropped?"
+    )
+
+
 def test_improve_does_not_prefix_by_default():
     seen: dict[str, str] = {}
 
@@ -233,3 +273,16 @@ def test_improve_prefix_runs_embedded_before_provider():
     assert "`api`" in out["revised"]
     assert out["change_notes"][:2] == ["pre-fix: i → I", "pre-fix: teh → the"]
     assert out["change_notes"][-1] == "improved"
+
+
+def test_improve_prefix_updates_multiline_structure_baseline():
+    text = "teh enviroment\nadn recieve"
+
+    def echo_pre_fixed(projection: str, _mode: str, _config: dict) -> ReviewResult:
+        return ReviewResult(revised=projection, prompt="sent")
+
+    fake = types.SimpleNamespace(__name__="redraft.providers.agent", review=echo_pre_fixed)
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {"improve": {"preFix": True}})
+
+    assert out["revised"] == "The environment\nand receive"
