@@ -14,8 +14,6 @@ return function(obj, ctx)
     self.config.fixProvider = self.config.fixProvider or "embedded"
     self.config.improveProvider = self.config.improveProvider or "none"
     self.config.improveStyle = self.config.improveStyle or "friendly"
-    self.config.improve = (type(self.config.improve) == "table") and self.config.improve or {}
-    if self.config.improve.preFix == nil then self.config.improve.preFix = false end
 
     local hk = self.config.hotkeys or {}
     hk.fix = hk.fix or { mods = { "cmd", "alt" }, key = "F" }
@@ -73,13 +71,5 @@ return function(obj, ctx)
     self:saveConfig()
     self:refreshMenu()
     notify("Redraft: improve style → " .. (ctx.STYLE_LABELS[style] or style))
-  end
-
-  function obj:setImprovePreFix(enabled)
-    self.config.improve = (type(self.config.improve) == "table") and self.config.improve or {}
-    self.config.improve.preFix = enabled == true
-    self:saveConfig()
-    self:refreshMenu()
-    notify("Redraft: fix before improve → " .. (self.config.improve.preFix and "on" or "off"))
   end
 end

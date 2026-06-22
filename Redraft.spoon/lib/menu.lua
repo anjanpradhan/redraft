@@ -164,15 +164,6 @@ return function(obj, ctx)
     end
     items[#items + 1] = { title = "Improve style:  " .. (ctx.STYLE_LABELS[curStyle] or curStyle), menu = styleItems }
 
-    local preFix = type(c.improve) == "table" and c.improve.preFix == true
-    items[#items + 1] = {
-      title = "Fix before Improve",
-      checked = preFix,
-      fn = function()
-        self:setImprovePreFix(not preFix)
-      end,
-    }
-
     local server = {}
     local function serverItem(kind, provider)
       if c[kind .. "Provider"] ~= provider or not ctx.service.plist(provider) then return end

@@ -5,7 +5,7 @@ def test_missing_file_returns_defaults(tmp_path):
     cfg = load_config(tmp_path / "nope.json")
     assert cfg["fixProvider"] == "embedded"
     assert cfg["embedded"] == {"spell": False}
-    assert cfg["improve"] == {"preFix": False}
+    assert cfg["improveStyle"] == "friendly"
 
 
 def test_notification_defaults_present(tmp_path):

@@ -144,15 +144,17 @@ def test_llm_provider_gets_real_line_breaks_and_restores():
     assert out["revised"] == text
 
 
-def test_llm_provider_cannot_drop_multiline_tail_silently():
+def test_llm_provider_can_shorten_multiline_without_semantic_rejection():
     text = "Of course.\nAnyway, I'm not doing anything in the coming sprint."
 
     def fake_review(_projection: str, _mode: str, _config: dict) -> ReviewResult:
         return ReviewResult(revised="Of course.", prompt="sent")
 
     fake = types.SimpleNamespace(__name__="redraft.providers.agent", review=fake_review)
-    with mock.patch("redraft.engine.pick_provider", return_value=fake), pytest.raises(RuntimeError, match="multiline"):
-        review(text, "improve", {})
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == "Of course."
 
 
 def test_llm_provider_can_collapse_line_break_when_content_survives():
@@ -183,21 +185,31 @@ def test_llm_provider_can_rephrase_multiline_tail_when_content_survives():
     assert out["revised"] == revised
 
 
-def test_llm_provider_retries_multiline_tail_drop_once():
-    text = "Of course.\nAnyway, I'm not doing anything in the coming sprint."
-    calls = {"n": 0}
+def test_llm_provider_can_absorb_short_context_lines():
+    text = "It would be a message on Slack.\nI would like warmer tone with professionalism and gratutude."
+    revised = "I'd like it to sound warmer and more professional, with gratitude."
 
-    def fake_review(projection: str, _mode: str, _config: dict) -> ReviewResult:
-        calls["n"] += 1
-        revised = "Of course." if calls["n"] == 1 else projection
-        return ReviewResult(revised=revised, prompt="sent")
-
-    fake = types.SimpleNamespace(__name__="redraft.providers.agent", review=fake_review)
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
     with mock.patch("redraft.engine.pick_provider", return_value=fake):
         out = review(text, "improve", {})
 
-    assert calls["n"] == 2
-    assert out["revised"] == text
+    assert out["revised"] == revised
+
+
+def test_llm_provider_content_free_output_is_not_semantically_rejected():
+    text = "It would be a message on Slack.\nI would like warmer tone with professionalism and gratutude."
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised="OK.", prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == "OK."
 
 
 def test_llm_provider_literal_escaped_newlines_become_real_newlines():
@@ -240,7 +252,7 @@ def test_llm_provider_restores_original_paragraph_separators_when_line_count_mat
     )
 
 
-def test_improve_does_not_prefix_by_default():
+def test_improve_runs_embedded_fix_before_provider_by_default():
     seen: dict[str, str] = {}
 
     def fake_review(text: str, _mode: str, _config: dict) -> ReviewResult:
@@ -253,11 +265,13 @@ def test_improve_does_not_prefix_by_default():
     )
     with mock.patch("redraft.engine.pick_provider", return_value=fake):
         out = review("i think teh `api` is down", "improve", {})
-    assert seen["text"].startswith("i think teh ")
-    assert out["revised"].startswith("i think teh ")
+    assert seen["text"].startswith("I think the ")
+    assert "{{R:0}}" in seen["text"]
+    assert out["revised"].startswith("I think the ")
+    assert "`api`" in out["revised"]
 
 
-def test_improve_prefix_runs_embedded_before_provider():
+def test_improve_fix_step_notes_are_reported_before_provider_notes():
     seen: dict[str, str] = {}
 
     def fake_review(text: str, _mode: str, _config: dict) -> ReviewResult:
@@ -266,7 +280,7 @@ def test_improve_prefix_runs_embedded_before_provider():
 
     fake = types.SimpleNamespace(__name__="redraft.providers.fake", review=fake_review)
     with mock.patch("redraft.engine.pick_provider", return_value=fake):
-        out = review("i think teh `api` is down", "improve", {"improve": {"preFix": True}})
+        out = review("i think teh `api` is down", "improve", {})
     assert seen["text"].startswith("I think the ")
     assert "{{R:0}}" in seen["text"]
     assert out["revised"].startswith("I think the ")
@@ -275,7 +289,7 @@ def test_improve_prefix_runs_embedded_before_provider():
     assert out["change_notes"][-1] == "improved"
 
 
-def test_improve_prefix_updates_multiline_structure_baseline():
+def test_improve_fix_step_updates_multiline_structure_baseline():
     text = "teh enviroment\nadn recieve"
 
     def echo_pre_fixed(projection: str, _mode: str, _config: dict) -> ReviewResult:
@@ -283,6 +297,6 @@ def test_improve_prefix_updates_multiline_structure_baseline():
 
     fake = types.SimpleNamespace(__name__="redraft.providers.agent", review=echo_pre_fixed)
     with mock.patch("redraft.engine.pick_provider", return_value=fake):
-        out = review(text, "improve", {"improve": {"preFix": True}})
+        out = review(text, "improve", {})
 
     assert out["revised"] == "The environment\nand receive"

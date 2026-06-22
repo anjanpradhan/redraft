@@ -121,8 +121,6 @@ The ◆ (running) / ◇ (paused) icon menu:
   Improve shows `(not configured)` until you set it, and a `Turn off` once configured.
 - **Improve style:** **Slack — friendly** (default) or **Email — formal** — the writing voice used
   for Improve, independent of which Improve provider you picked.
-- **Fix before Improve** optionally runs the conservative built-in Fix pass before an Improve
-  provider. It is off by default and is useful when you want agents/models to see cleaner input.
 - **Server controls** appear only for a selected server-backed provider (LanguageTool / Ollama):
   **Start / Stop / Restart** with a live ● running / ○ stopped indicator.
 - **Show last result…** reopens the most recent result in a copyable window (see below).
@@ -176,7 +174,6 @@ is `llama3.2:3b` (already 4-bit `q4_K_M`).
   "hotkeys": { "fix": {"mods":["cmd","alt"],"key":"F"}, "improve": {"mods":["cmd","alt"],"key":"I"} },
   "fixProvider": "embedded",
   "improveProvider": "ollama",        // or "agent", "command", or "none"
-  "improve": { "preFix": false },      // optional embedded Fix pass before Improve
   "ollama": { "url": "http://localhost:11434", "model": "llama3.2:3b" },
   "command": { "cmd": "ollama run llama3.2:3b", "timeoutMs": 60000 },
   "languagetool": { "url": "http://localhost:8081", "language": "en-US" }
@@ -184,6 +181,9 @@ is `llama3.2:3b` (already 4-bit `q4_K_M`).
 ```
 
 Edit it (then **Reload config** from the menu), or flip providers from the menu directly.
+
+Improve always runs the conservative built-in Fix pass first, then hands the cleaned protected text to
+the selected Improve provider.
 
 Using `command` for **both** Fix and Improve? Give each its own CLI with `command.fixCmd` /
 `command.improveCmd` — they override the shared `command.cmd`:

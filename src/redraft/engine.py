@@ -2,78 +2,11 @@
 
 from __future__ import annotations
 
-import re
-
 from .protect import check_invariant, protect, restore
 from .providers import embedded as embedded_provider
 from .providers import pick_provider
 
 _MAX_INVARIANT_RETRIES = 1  # resample an LLM provider once if it drops/dups a {{R:n}} token
-_STRUCTURE_CHECK_PROVIDERS = {"agent", "command", "ollama"}
-_WORD_RE = re.compile(r"[A-Za-z0-9]+(?:'[A-Za-z0-9]+)?")
-_COMMON_WORDS = frozenset(
-    {
-        "a",
-        "an",
-        "and",
-        "are",
-        "as",
-        "at",
-        "be",
-        "been",
-        "but",
-        "by",
-        "for",
-        "from",
-        "i",
-        "i'm",
-        "in",
-        "is",
-        "it",
-        "not",
-        "of",
-        "on",
-        "or",
-        "that",
-        "the",
-        "this",
-        "to",
-        "was",
-        "were",
-        "with",
-    }
-)
-
-
-def _improve_prefix_enabled(config: dict) -> bool:
-    improve = config.get("improve")
-    return isinstance(improve, dict) and improve.get("preFix") is True
-
-
-def _provider_name(provider: object) -> str:
-    return getattr(provider, "__name__", "").rsplit(".", 1)[-1]
-
-
-def _content_words(text: str) -> list[str]:
-    words = [w.lower() for w in _WORD_RE.findall(text)]
-    significant = [w for w in words if w not in _COMMON_WORDS]
-    return significant or words
-
-
-def _multiline_content_ok(original: str, revised: str) -> tuple[bool, str | None]:
-    lines = [line.strip() for line in original.splitlines() if line.strip()]
-    if len(lines) <= 1:
-        return True, None
-
-    revised_words = set(_content_words(revised))
-    for line_no, line in enumerate(lines, start=1):
-        words = set(_content_words(line))
-        if len(words) < 2:
-            continue  # Short acknowledgements like "Of course." may reasonably be rephrased.
-        overlap = len(words & revised_words)
-        if overlap == 0:
-            return False, f"multiline content dropped near line {line_no}"
-    return True, None
 
 
 def _normalize_escaped_newlines(original: str, revised: str) -> str:
@@ -146,7 +79,7 @@ def review(text: str, mode: str, config: dict, app: str | None = None) -> dict:
     projection, spans = protect(text)
     structure_baseline = text
     pre_notes: list[str] = []
-    if mode == "improve" and _improve_prefix_enabled(config):
+    if mode == "improve":
         pre_result = embedded_provider.review(projection, "fix", config)
         ok, reason = check_invariant(len(spans), pre_result.revised)
         if not ok:
@@ -155,13 +88,10 @@ def review(text: str, mode: str, config: dict, app: str | None = None) -> dict:
         structure_baseline = restore(projection, spans)
         pre_notes = [f"pre-fix: {note}" for note in pre_result.change_notes]
 
-    check_structure = _provider_name(provider) in _STRUCTURE_CHECK_PROVIDERS
     result = provider.review(projection, mode, config)
     result.revised = _normalize_multiline_output(structure_baseline, result.revised)
     ok, reason = check_invariant(len(spans), result.revised)
     restored = restore(result.revised, spans) if ok else ""
-    if ok and check_structure:
-        ok, reason = _multiline_content_ok(structure_baseline, restored)
 
     # An LLM provider (result.prompt is set) can drop or duplicate a {{R:n}} token; at temperature a
     # fresh sample often gets it right. Deterministic providers (embedded, languagetool) edit only the
@@ -174,8 +104,6 @@ def review(text: str, mode: str, config: dict, app: str | None = None) -> dict:
         result.revised = _normalize_multiline_output(structure_baseline, result.revised)
         ok, reason = check_invariant(len(spans), result.revised)
         restored = restore(result.revised, spans) if ok else ""
-        if ok and check_structure:
-            ok, reason = _multiline_content_ok(structure_baseline, restored)
 
     if not ok:
         raise RuntimeError(f"output invariant violated ({reason}); leaving text unchanged")

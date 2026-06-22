@@ -651,11 +651,6 @@ cfg.setdefault("hotkeys", {"fix": {"mods": ["cmd", "alt"], "key": "F"},
 cfg["fixProvider"] = fix
 cfg["improveProvider"] = improve
 cfg.setdefault("improveStyle", "friendly")  # Slack-friendly by default; "formal" = email tone
-improve_cfg = cfg.get("improve")
-if not isinstance(improve_cfg, dict):
-    improve_cfg = {}
-cfg["improve"] = improve_cfg
-improve_cfg.setdefault("preFix", False)
 emb = cfg.setdefault("embedded", {})
 if embedded_spell in ("true", "false"):
     emb["spell"] = embedded_spell == "true"

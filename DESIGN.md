@@ -72,7 +72,8 @@ install time.
    Every pattern is **sigil-anchored** (a backtick, `http`, the `@…\.` email shape, `$`, a leading
    `./`/`../`/`~/` or a ≥2-segment `/abs` path off a word boundary, a `v`-prefix or 3+ dotted parts,
    `@`/`#`) so prose is never swept up — `and/or`, `12/25/2024`, `3.14`, a markdown `# Heading`.
-2. **Provider** — run the mode's provider on the protected projection.
+2. **Provider** — run the mode's provider on the protected projection. Improve first runs the embedded
+   Fix provider on that projection so typo cleanup happens before tone/style rewriting.
 3. **Invariant** — a per-review **multiset** check: each token id appears exactly once (order may
    change), no unknown ids. Violation → reject (the user's text is left unchanged).
 4. **Restore** — expand tokens back to their original spans.
@@ -135,8 +136,7 @@ protected by the path rule.
   active provider in their title and write `config.json` on switch; Improve shows `(not configured)`
   until set and a `Turn off` once set. An **Improve style** submenu switches `improveStyle` between
   **Slack — friendly** and **Email — formal** (applies to whichever Improve provider is active).
-  **Fix before Improve** toggles `improve.preFix`, an opt-in embedded Fix pass before an Improve
-  provider. For a selected server-backed provider (LanguageTool/Ollama)
+  For a selected server-backed provider (LanguageTool/Ollama)
   with an installed launchd plist, a **server submenu** offers **Start/Stop/Restart** (via `launchctl`,
   with a live ●/○ status). **Show last result…**, **Edit/Reload config**, and **Quit** (full
   teardown — unbind hotkeys + remove the menu-bar icon; servers left running; restored via
@@ -146,7 +146,7 @@ protected by the path rule.
 
 `~/.config/redraft/config.json`, read by the engine and the Spoon (the Spoon also writes it on a
 provider switch, preserving other keys): `fixProvider`, `improveProvider`,
-`improveStyle` (`friendly`|`formal`), `improve{preFix}`, `hotkeys`,
+`improveStyle` (`friendly`|`formal`), `hotkeys`,
 `embedded{spell}`, `ollama{url,model}`, `agent{tool,timeoutMs,bins,commands}` (tool =
 auto|claude|codex|gemini|copilot; `commands` are per-tool shell templates **seeded by the installer
 from `agent.default_commands()` and editable in config** — `{bin}` = resolved CLI path,

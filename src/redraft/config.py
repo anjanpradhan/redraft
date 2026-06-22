@@ -9,10 +9,6 @@ from pathlib import Path
 DEFAULTS: dict = {
     "fixProvider": "embedded",
     "improveProvider": "none",
-    # Optional: before an Improve provider runs, apply the conservative embedded Fix pass to clean
-    # obvious typos/punctuation. Off by default so Improve remains a single explicit transformation
-    # unless the user opts into the extra local pre-pass.
-    "improve": {"preFix": False},
     # Improve writing style: "friendly" (Slack, default) or "formal" (email). Selects which prompt
     # template the LLM improve providers use (see redraft/prompts/<style>-prompt.txt).
     "improveStyle": "friendly",
