@@ -26,7 +26,7 @@ _FORMAT_SCHEMA = {
 def review(text: str, mode: str, config: dict) -> ReviewResult:
     cfg = config.get("ollama", {})
     url = cfg.get("url", "http://localhost:11434").rstrip("/") + "/api/chat"
-    prompt = build_prompt(mode, text, config)  # full template (with <message> spliced in)
+    prompt = build_prompt(mode, text, config)  # full template with message data spliced in
     payload = {
         "model": cfg.get("model", "llama3.2:3b"),
         "stream": False,

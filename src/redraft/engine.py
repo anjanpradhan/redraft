@@ -11,9 +11,45 @@ _MAX_INVARIANT_RETRIES = 1  # resample an LLM provider once if it drops/dups a {
 
 def _normalize_escaped_newlines(original: str, revised: str) -> str:
     """Repair providers that double-escape multiline output as literal ``\n`` text."""
-    if "\n" not in original or "\\n" not in revised or "\n" in revised:
+    if "\n" not in original or "\\n" not in revised:
         return revised
-    return revised.replace("\\r\\n", "\n").replace("\\n", "\n")
+    candidate = revised.replace("\\r\\n", "\n").replace("\\n", "\n")
+    if "\n" not in revised:
+        return candidate
+    original_line_count = len(_line_shape(original)[1])
+    revised_distance = abs(len(_line_shape(revised)[1]) - original_line_count)
+    candidate_distance = abs(len(_line_shape(candidate)[1]) - original_line_count)
+    return candidate if candidate_distance < revised_distance else revised
+
+
+def _normalize_escaped_tabs(original: str, revised: str) -> str:
+    """Repair providers that double-escape tabs as literal ``\\t`` text."""
+    if "\\t" not in revised:
+        return revised
+    if "\t" in original:
+        return revised.replace("\\t", "\t")
+    if "\\t" in original:
+        return revised
+    return revised.replace("\\t", "  ")
+
+
+def _normalize_visible_escape_sequences(original: str, revised: str) -> str:
+    """Repair providers that expose JSON/string escapes as visible prose."""
+    replacements = {
+        "\\'": "'",
+        "\\u0027": "'",
+        "\\u2018": "\u2018",
+        "\\u2019": "\u2019",
+        "\\u201c": "\u201c",
+        "\\u201d": "\u201d",
+        "\\u2013": "\u2013",
+        "\\u2014": "\u2014",
+        "\\u2026": "\u2026",
+    }
+    for escaped, replacement in replacements.items():
+        if escaped in revised and escaped not in original:
+            revised = revised.replace(escaped, replacement)
+    return revised
 
 
 def _line_shape(text: str) -> tuple[str, list[str], list[str], str]:
@@ -62,6 +98,8 @@ def _restore_line_separators(original: str, revised: str) -> str:
 
 def _normalize_multiline_output(original: str, revised: str) -> str:
     revised = _normalize_escaped_newlines(original, revised)
+    revised = _normalize_escaped_tabs(original, revised)
+    revised = _normalize_visible_escape_sequences(original, revised)
     return _restore_line_separators(original, revised)
 
 

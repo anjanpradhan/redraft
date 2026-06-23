@@ -21,4 +21,4 @@ py:     ## Python: pre-commit suite (validates + autofixes)
 test:   ## Python: run tests
 	uv run pytest
 
-check: py lua test   ## Format, lint, and test everything
+check: lua py test   ## Format, lint, and test everything

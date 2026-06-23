@@ -222,8 +222,10 @@ The installer drops them in `~/.config/redraft/`:
 `improveStyle` (config or the **Improve style** menu) picks `friendly`/`formal`. Edit a file and it
 takes effect on the next run — no reload needed. Each template must keep the `{{R:n}}` token rule
 and the `Respond ONLY as JSON …` line (the model's output is parsed as JSON, and the token invariant
-rejects anything that drops a protected span). The message is spliced in wherever you put
-`<message>`. Delete a file to fall back to the built-in default (bundled with the engine).
+rejects anything that drops a protected span). Prefer `<message_json>` when placing the selected text
+inside an `Input JSON` block; it inserts a JSON string literal so multiline or instruction-like text
+stays data. Existing custom templates can still use raw `<message>`. Delete a file to fall back to the
+built-in default.
 
 ### Notifications
 

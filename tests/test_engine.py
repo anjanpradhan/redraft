@@ -104,9 +104,9 @@ def test_engine_includes_prompt_for_shell_provider(tmp_path: Path, monkeypatch: 
     cfg = {"fixProvider": "command", "command": {"cmd": 'printf \'{"revised":"ok {{R:0}}"}\''}}
     out = review("ping `code`", "fix", cfg)
     # The reported prompt is what the model saw: the protected projection ({{R:0}} for `code`),
-    # spliced into the fix template's <message> slot.
+    # spliced into the fix template's JSON message slot.
     assert "{{R:0}}" in out["prompt"]
-    assert "MESSAGE:" in out["prompt"]
+    assert "Input JSON:" in out["prompt"]
 
 
 def test_engine_includes_raw_response_for_shell_provider():
@@ -224,6 +224,118 @@ def test_llm_provider_literal_escaped_newlines_become_real_newlines():
         out = review(text, "improve", {})
 
     assert out["revised"] == revised.replace("\\n", "\n")
+
+
+def test_llm_provider_mixed_escaped_newlines_become_real_when_matching_shape():
+    text = "Plan:\n- existing components\n- new components\n\nFirst analyze.\nAsk questions."
+    revised = "Plan:\\n- existing components\\n- new components\n\nFirst analyze.\nAsk questions."
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == revised.replace("\\n", "\n")
+
+
+def test_llm_provider_preserves_literal_backslash_n_when_shape_is_not_improved():
+    text = "Use literal \\n in docs.\nThen continue."
+    revised = "Use literal \\n in docs.\nThen continue."
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == revised
+
+
+def test_llm_provider_escaped_tabs_become_spaces_when_not_source_content():
+    text = "Plan:\n- existing components\n- new components"
+    revised = "Plan:\n\\t- existing components\n\\t- new components"
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == "Plan:\n  - existing components\n  - new components"
+
+
+def test_llm_provider_escaped_tabs_restore_real_tabs_when_original_uses_tabs():
+    text = "Name\tValue\nalpha\t1"
+    revised = "Name\\tValue\nalpha\\t1"
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == text
+
+
+def test_llm_provider_preserves_literal_backslash_t_when_original_has_it():
+    text = "Use literal \\t in docs.\nThen continue."
+    revised = "Use literal \\t in docs.\nThen continue."
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == revised
+
+
+def test_llm_provider_escaped_apostrophes_are_repaired():
+    text = "I'll do it.\nDon't wait."
+    revised = "I\\'ll do it.\nDon\\u0027t wait."
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == "I'll do it.\nDon't wait."
+
+
+def test_llm_provider_unicode_escapes_decode_to_unicode_punctuation():
+    text = 'He said, "Do not wait - really..."'
+    revised = "He said, \\u201cDon\\u2019t wait\\u2014really\\u2026\\u201d"
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == "He said, \u201cDon\u2019t wait\u2014really\u2026\u201d"
+
+
+def test_llm_provider_preserves_literal_prose_escapes_when_original_has_them():
+    text = "Use literal \\u2019 and \\' in docs."
+    revised = "Use literal \\u2019 and \\' in docs."
+
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _projection, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert out["revised"] == revised
 
 
 def test_llm_provider_restores_original_paragraph_separators_when_line_count_matches():
