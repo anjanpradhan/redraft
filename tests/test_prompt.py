@@ -47,6 +47,7 @@ def test_fix_uses_fix_template():
     assert "<message_json>" not in p
     assert "HELLO" in p
     assert "smallest set" in p  # the fix template's wording
+    assert "A token id is not a substitute" in p
 
 
 def test_improve_defaults_to_friendly():
@@ -60,6 +61,7 @@ def test_friendly_prompt_preserves_structure_and_guides_quality():
     assert "input.message" in p
     assert "<message_json>" not in p
     assert "Preserve every {{R:n}} token EXACTLY" in p
+    assert "never 0, R:0" in p
     assert "Do NOT add or invent facts" in p
     assert "do not include literal \\n or \\t text" in p
     assert "do not include literal \\' or \\u2019 escape text" in p
@@ -79,6 +81,7 @@ def test_formal_prompt_preserves_structure_and_guides_quality():
     assert "input.message" in p
     assert "<message_json>" not in p
     assert "Preserve every {{R:n}} token EXACTLY" in p
+    assert "never 0, R:0" in p
     assert "Do NOT add or invent facts" in p
     assert "do not include literal \\n or \\t text" in p
     assert "do not include literal \\' or \\u2019 escape text" in p

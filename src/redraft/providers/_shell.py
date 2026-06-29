@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 from typing import TYPE_CHECKING
 
+from redraft.base import ReviewError
 from redraft.prompt import build_result, extract_json
 
 if TYPE_CHECKING:
@@ -23,6 +24,12 @@ if TYPE_CHECKING:
 # error in a scrollable, copyable modal — enough to read a full auth/usage error (e.g. an agent
 # CLI's IneligibleTierError), not just the first line.
 _STDERR_LIMIT = 4000
+
+
+def _raw_response(stdout: str, stderr: str) -> str:
+    if stdout and stderr:
+        return f"{stdout}\n\nstderr:\n{stderr}"
+    return stdout or stderr
 
 
 def run(cmd: str, prompt: str, timeout_ms: int, source: str) -> ReviewResult:
@@ -79,17 +86,48 @@ def run(cmd: str, prompt: str, timeout_ms: int, source: str) -> ReviewResult:
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            raise RuntimeError(f"{source} timed out after {int(timeout)}s{where}") from None
+            raise ReviewError(
+                f"{source} timed out after {int(timeout)}s{where}",
+                provider=source,
+                command=display_cmd,
+                prompt=prompt,
+            ) from None
         except OSError as e:
-            raise RuntimeError(f"failed to run {source}: {e}{where}") from e
+            raise ReviewError(
+                f"failed to run {source}: {e}{where}",
+                provider=source,
+                command=display_cmd,
+                prompt=prompt,
+            ) from e
 
         if proc.returncode != 0:
-            raise RuntimeError(f"{source} exited {proc.returncode}: {proc.stderr.strip()[:_STDERR_LIMIT]}{where}")
+            raise ReviewError(
+                f"{source} exited {proc.returncode}: {proc.stderr.strip()[:_STDERR_LIMIT]}{where}",
+                provider=source,
+                command=display_cmd,
+                prompt=prompt,
+                raw=_raw_response(proc.stdout, proc.stderr),
+            )
 
         json_str = extract_json(proc.stdout)
         if not json_str:
-            raise RuntimeError(f"{source} produced no JSON object{where}")
-        result = build_result(_loads(json_str, source), source)
+            raise ReviewError(
+                f"{source} produced no JSON object{where}",
+                provider=source,
+                command=display_cmd,
+                prompt=prompt,
+                raw=proc.stdout,
+            )
+        try:
+            result = build_result(_loads(json_str, source), source)
+        except RuntimeError as e:
+            raise ReviewError(
+                str(e),
+                provider=source,
+                command=display_cmd,
+                prompt=prompt,
+                raw=proc.stdout,
+            ) from e
         result.command = display_cmd
         result.prompt = prompt
         result.raw = proc.stdout  # the CLI's full stdout (chatter + JSON), before extraction

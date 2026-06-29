@@ -51,11 +51,12 @@ selection ─⌘C→ Spoon (Lua) ─→ <venv>/bin/python3 -m redraft --mode …
 The engine auto-protects high-signal technical spans — `` `code` ``, [markdown](links), URLs,
 emails, `$ENV` vars, file paths (`./x`, `~/x`, `/a/b`), version strings (`v1.2.3`), `@mentions`,
 and `#channels` — behind a token invariant; if a provider can't preserve them the change is
-**refused** and your text is left untouched. The patterns are sigil-anchored so ordinary prose
-(`and/or`, `12/25/2024`, `3.14`, a markdown `# Heading`) is never swept up. API-style paths
-(`/v1/foo`) are protected as paths; other plaintext identifiers (`p95`, bare `POST`) aren't
-auto-protected — wrap them in backticks. No server/daemon — the engine
-runs as a short-lived subprocess per keystroke.
+**refused** and your text is left untouched. The engine repairs the narrow case where a model turns
+`{{R:0}}` into a standalone `0` in the same local context, then still runs the invariant. The
+patterns are sigil-anchored so ordinary prose (`and/or`, `12/25/2024`, `3.14`, a markdown
+`# Heading`) is never swept up. API-style paths (`/v1/foo`) are protected as paths; other plaintext
+identifiers (`p95`, bare `POST`) aren't auto-protected — wrap them in backticks. No server/daemon —
+the engine runs as a short-lived subprocess per keystroke.
 
 ## Providers (pick per mode, from the menu or config)
 
@@ -131,8 +132,9 @@ settles back to ◆. Clicking a **success notification** opens a small **copyabl
 titled, bordered panel with per-section Copy buttons — showing the text that replaced your selection,
 the change notes and any risk flags, and (for `agent`/`command`/`ollama` providers) the **agent's
 raw response**, plus collapsible **Command** and **Prompt** sections (the resolved command display
-and full prompt sent, `{{R:n}}` tokens and all). Clicking an **error notification** opens the full error text
-the same way. Neither opens Hammerspoon's config.
+and full prompt sent, `{{R:n}}` tokens and all). Clicking an **error notification** opens the full
+error text the same way, with the prompt and raw response when the provider supplied them. Neither
+opens Hammerspoon's config.
 
 **Pause vs Quit:** Pause just disables the hotkeys (the icon stays). **Quit Redraft** fully tears
 it down — unbinds the hotkeys and removes the menu-bar icon (managed servers keep running). It does

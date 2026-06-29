@@ -8,6 +8,7 @@ Rules:
 - In revised, line breaks should be real line breaks in the string, and indentation should use spaces; do not include literal \n or \t text.
 - Write apostrophes normally in contractions, such as I'll and don't; do not include literal \' or \u2019 escape text.
 - Preserve every {{R:n}} token EXACTLY — same ids, same count, invent none.
+- A token id is not a substitute: output {{R:0}}, never 0, R:0, or the hidden original text.
 - Do NOT add or invent facts, names, numbers, dates, owners, or commitments.
 - Improve typos, spelling, grammar, tense, pluralization, punctuation, sentence structure, and wording.
 - Preserve the original intent, order, and hierarchy.
@@ -34,7 +35,7 @@ List cleanup example:
 If input.message has:
 Need to update things:
  - for existing item - keep current setting
- - offer to update them by deafult (Y/n)
+ - offer to update them by default (Y/n)
 A good revised value keeps the list but improves wording:
 Need to update things:
 - For existing items: keep the current setting

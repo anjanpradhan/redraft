@@ -117,7 +117,15 @@ return function(obj, ctx)
         end
         if data.error or type(data.revised) ~= "string" then
           local full = tostring(data.error or "no result")
-          return fail("Redraft: " .. full:sub(1, 160), full)
+          local detail = {
+            error = full,
+            provider = data.provider,
+            mode = data.mode,
+            command = data.command,
+            prompt = data.prompt,
+            raw = data.raw,
+          }
+          return fail("Redraft: " .. full:sub(1, 160), detail)
         end
         if not focus.stillCurrent(focusSnapshot) then
           return fail("Redraft: focus changed — skipped (your text is unchanged)")

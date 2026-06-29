@@ -1,8 +1,10 @@
 import json
+from unittest import mock
 
 import pytest
 
 from redraft import cli
+from redraft.base import ReviewError
 
 
 def _run(capsys, argv):
@@ -47,3 +49,26 @@ def test_empty_input_errors(tmp_path, capsys):
     rc, data = _run(capsys, ["--mode", "fix", "--input", str(f)])
     assert rc == 1
     assert data["error"] == "empty input"
+
+
+def test_structured_review_error_includes_debug_context(tmp_path, capsys):
+    f = tmp_path / "in.txt"
+    f.write_text("ping `code`", encoding="utf-8")
+    err = ReviewError(
+        "output invariant violated (token {{R:0}} appears 0x, expected 1); leaving text unchanged",
+        provider="agent",
+        mode="improve",
+        command="agent --run",
+        prompt="sent prompt",
+        raw='{"revised":"dropped"}',
+    )
+    with mock.patch("redraft.cli.review", side_effect=err):
+        rc, data = _run(capsys, ["--mode", "improve", "--input", str(f)])
+
+    assert rc == 1
+    assert data["error"].startswith("output invariant violated")
+    assert data["provider"] == "agent"
+    assert data["mode"] == "improve"
+    assert data["command"] == "agent --run"
+    assert data["prompt"] == "sent prompt"
+    assert data["raw"] == '{"revised":"dropped"}'

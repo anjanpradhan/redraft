@@ -48,6 +48,7 @@ _GENERIC = (
     "- Use real line breaks and spaces for indentation; do not include literal \\n or \\t text.\n"
     "- Write apostrophes normally; do not include literal \\' or \\u2019 escape text.\n"
     "- Preserve every {{R:n}} token EXACTLY — same ids, same count, invent none.\n"
+    "- A token id is not a substitute: output {{R:0}}, never 0, R:0, or the hidden original text.\n"
     "- Do NOT invent facts, names, numbers, dates, owners, or commitments.\n"
     'Respond ONLY as JSON: {"revised": string, "change_notes": [string], "risk_flags": [string]}.\n\n'
     'Input JSON:\n{"message": <message_json>}'

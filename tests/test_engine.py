@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from redraft.base import ReviewResult
+from redraft.base import ReviewError, ReviewResult
 from redraft.engine import review
 
 
@@ -64,6 +64,90 @@ def test_llm_invariant_retry_exhausted_raises():
     with mock.patch("redraft.engine.pick_provider", return_value=fake), pytest.raises(RuntimeError, match="invariant"):
         review("ping `code`", "improve", {})
     assert calls["n"] == 2  # original + one retry, then gives up
+
+
+def test_invariant_failure_includes_provider_context():
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _text, _mode, _config: ReviewResult(
+            revised="dropped the token",
+            command="agent --run",
+            prompt="sent prompt with {{R:0}}",
+            raw='{"revised":"dropped the token"}',
+        ),
+    )
+    with mock.patch("redraft.engine.pick_provider", return_value=fake), pytest.raises(ReviewError) as excinfo:
+        review("ping `code`", "improve", {})
+
+    data = excinfo.value.to_dict()
+    assert data["error"].startswith("output invariant violated")
+    assert data["provider"] == "agent"
+    assert data["mode"] == "improve"
+    assert data["command"] == "agent --run"
+    assert data["prompt"] == "sent prompt with {{R:0}}"
+    assert data["raw"] == '{"revised":"dropped the token"}'
+
+
+def test_llm_collapsed_token_ids_are_repaired():
+    text = "Notebook: `/Users/me/path with spaces`.\nDesign: /Users/me/design.md"
+    revised = "Notebook: 0.\nDesign: 1"
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _text, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "fix", {})
+
+    assert out["revised"] == text
+
+
+def test_llm_collapsed_token_ids_are_repaired_for_notebook_design_request():
+    text = (
+        "I am building a proper scalable pipeline to release to product of "
+        "`/Users/P5NL9M9/workspace/dig/evaluation/replacement_sku/Sub Recs v2/sumeet_folder/"
+        "v9_search_space_exploration` (this is our Data Science partner's notebook).\n\n"
+        "The design is /Users/P5NL9M9/workspace/dig/active/substitution-recs-batch/TECHNICAL_DESIGN.md\n"
+        "I want you to analyze and make sure design is correct we are not missiging out anything."
+    )
+    revised = (
+        "I am building a proper scalable pipeline to release to product of 0 "
+        "(this is our Data Science partner's notebook).\n\n"
+        "The design is 1\n"
+        "I want you to analyze and ensure the design is correct, so we don't miss out on anything."
+    )
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _text, _mode, _config: ReviewResult(revised=revised, prompt="sent"),
+    )
+
+    with mock.patch("redraft.engine.pick_provider", return_value=fake):
+        out = review(text, "improve", {})
+
+    assert "/v9_search_space_exploration`" in out["revised"]
+    assert "/TECHNICAL_DESIGN.md" in out["revised"]
+    assert "product of 0" not in out["revised"]
+    assert "The design is 1" not in out["revised"]
+
+
+def test_llm_collapsed_token_repair_refuses_ambiguous_numbers():
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _text, _mode, _config: ReviewResult(revised="Use 0 or 0.", prompt="sent"),
+    )
+
+    with mock.patch("redraft.engine.pick_provider", return_value=fake), pytest.raises(ReviewError, match="invariant"):
+        review("Use `/tmp/path`.", "fix", {})
+
+
+def test_llm_collapsed_token_repair_refuses_real_number_in_wrong_context():
+    fake = types.SimpleNamespace(
+        __name__="redraft.providers.agent",
+        review=lambda _text, _mode, _config: ReviewResult(revised="Failed with 0.", prompt="sent"),
+    )
+
+    with mock.patch("redraft.engine.pick_provider", return_value=fake), pytest.raises(ReviewError, match="invariant"):
+        review("`/tmp/path` failed with 0.", "fix", {})
 
 
 def test_deterministic_invariant_failure_not_retried():

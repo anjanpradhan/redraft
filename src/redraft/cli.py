@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 
+from .base import ReviewError
 from .config import load_config
 from .engine import review
 
@@ -32,6 +33,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         result = review(text, args.mode, load_config(), args.app)
+    except ReviewError as e:
+        print(json.dumps(e.to_dict()))
+        return 1
     except Exception as e:
         print(json.dumps({"error": str(e)}))
         return 1

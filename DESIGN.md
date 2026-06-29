@@ -56,7 +56,9 @@ install time.
   profile; the `redraft` console script is the equivalent entry point).
 - Engine stdout: `{"revised","change_notes","risk_flags","provider","mode"}` on success (plus
   optional `command`/`prompt`/`raw` for shell/LLM providers — resolved command display, full prompt
-  sent, and raw model/CLI response), or `{"error": "..."}` (exit 1) on failure. On any error the Spoon posts a macOS Notification Center
+  sent, and raw model/CLI response), or `{"error": "...", ...debug context...}` (exit 1) on failure.
+  Failure context may include `provider`, `mode`, `command`, `prompt`, and `raw` when available. On
+  any error the Spoon posts a macOS Notification Center
   notification (all status/success/errors go there via `hs.notify`, newest replacing the previous)
   and leaves the selection untouched (restoring the clipboard). The **success** notification
   surfaces the result: subtitle `Fixed`/`Improved · <provider>`, body a bounded change summary
@@ -74,8 +76,10 @@ install time.
    `@`/`#`) so prose is never swept up — `and/or`, `12/25/2024`, `3.14`, a markdown `# Heading`.
 2. **Provider** — run the mode's provider on the protected projection. Improve first runs the embedded
    Fix provider on that projection so typo cleanup happens before tone/style rewriting.
-3. **Invariant** — a per-review **multiset** check: each token id appears exactly once (order may
-   change), no unknown ids. Violation → reject (the user's text is left unchanged).
+3. **Invariant** — repair the narrow case where an LLM collapsed `{{R:0}}` to standalone `0` in the
+   same local context, then run a per-review **multiset** check: each token id appears exactly once
+   (order may change), no unknown ids. Any remaining violation → reject (the user's text is left
+   unchanged).
 4. **Restore** — expand tokens back to their original spans.
 
 The safety net that lets a small/local model be used without risking corruption of code/links.
@@ -130,7 +134,8 @@ protected by the path rule.
   a titled/bordered panel with per-section Copy — the revised text, change notes, risk flags, and —
   for shell/LLM providers — the agent's **raw** response plus collapsible **command** and **prompt**
   panes, all carried in the engine's output JSON). An **error** click opens the full error text in
-  the same modal. The result is stashed regardless of muting, so **Show last result…** reopens it.
+  the same modal, with **raw**, **command**, and **prompt** panes when the engine returned them. The
+  result is stashed regardless of muting, so **Show last result…** reopens it.
 - Menu-bar (`hs.menubar`): ◆ running / ◇ paused header; **Pause/Resume** (enable/disable hotkeys)
   and **Restart** (reload config *and* rebind hotkeys). **Fix:** / **Improve:** submenus show the
   active provider in their title and write `config.json` on switch; Improve shows `(not configured)`
@@ -213,7 +218,8 @@ Hammerspoon/Homebrew/Java/Ollama alone.
   provider makes no network calls; LanguageTool/Ollama talk to localhost services you opt into.
   Agent/Custom providers execute a CLI you configure and may use that CLI's cloud account or
   credentials. (The one-time *install* fetches the build backend + Homebrew casks.)
-- Correctness is enforced in code (invariant + refuse-on-violation), not just prompts.
+- Correctness is enforced in code (context-bounded token repair + invariant + refuse-on-violation),
+  not just prompts.
 
 ## Limitations (v1)
 

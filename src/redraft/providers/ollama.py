@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from typing import TYPE_CHECKING
 
+from redraft.base import ReviewError
 from redraft.prompt import build_prompt, build_result
 
 if TYPE_CHECKING:
@@ -49,23 +50,61 @@ def review(text: str, mode: str, config: dict) -> ReviewResult:
         except json.JSONDecodeError:
             detail = body
         if e.code == 404:
-            raise RuntimeError(f"Ollama has no model '{payload['model']}' — run: ollama pull {payload['model']}") from e
-        raise RuntimeError(f"Ollama at {url} returned HTTP {e.code}" + (f": {detail}" if detail else "")) from e
+            raise ReviewError(
+                f"Ollama has no model '{payload['model']}' — run: ollama pull {payload['model']}",
+                provider="ollama",
+                mode=mode,
+                prompt=prompt,
+                raw=body,
+            ) from e
+        raise ReviewError(
+            f"Ollama at {url} returned HTTP {e.code}" + (f": {detail}" if detail else ""),
+            provider="ollama",
+            mode=mode,
+            prompt=prompt,
+            raw=body,
+        ) from e
     except (urllib.error.URLError, TimeoutError, OSError) as e:
-        raise RuntimeError(f"cannot reach Ollama at {url} ({e}); is `ollama serve` running?") from e
+        raise ReviewError(
+            f"cannot reach Ollama at {url} ({e}); is `ollama serve` running?",
+            provider="ollama",
+            mode=mode,
+            prompt=prompt,
+        ) from e
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        raise RuntimeError(f"Ollama at {url} returned a non-JSON response") from None
+        raise ReviewError(
+            f"Ollama at {url} returned a non-JSON response",
+            provider="ollama",
+            mode=mode,
+            prompt=prompt,
+            raw=raw,
+        ) from None
 
     content = (data.get("message") or {}).get("content") if isinstance(data, dict) else None
     if not content:
-        raise RuntimeError("Ollama returned an unexpected response")
+        raise ReviewError(
+            "Ollama returned an unexpected response",
+            provider="ollama",
+            mode=mode,
+            prompt=prompt,
+            raw=raw,
+        )
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:
-        raise RuntimeError("Ollama did not return valid JSON") from None
-    result = build_result(parsed, "Ollama")
+        raise ReviewError(
+            "Ollama did not return valid JSON",
+            provider="ollama",
+            mode=mode,
+            prompt=prompt,
+            raw=content,
+        ) from None
+    try:
+        result = build_result(parsed, "Ollama")
+    except RuntimeError as e:
+        raise ReviewError(str(e), provider="ollama", mode=mode, prompt=prompt, raw=content) from e
     result.prompt = prompt  # exactly what was sent to the model
     result.raw = content  # the model's raw response content, before JSON parsing
     return result

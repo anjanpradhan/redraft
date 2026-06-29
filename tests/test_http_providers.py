@@ -5,6 +5,7 @@ from typing import Never
 
 import pytest
 
+from redraft.base import ReviewError
 from redraft.providers import languagetool, ollama
 
 
@@ -54,6 +55,18 @@ def test_ollama_non_json_body(monkeypatch):
     _urlopen(monkeypatch, lambda *a, **k: _Resp("<html>503</html>"))
     with pytest.raises(RuntimeError, match="non-JSON"):
         ollama.review("hi", "improve", {})
+
+
+def test_ollama_error_includes_prompt_and_raw_response(monkeypatch):
+    _urlopen(monkeypatch, lambda *a, **k: _Resp("<html>503</html>"))
+    with pytest.raises(ReviewError) as ei:
+        ollama.review("hi", "improve", {})
+
+    data = ei.value.to_dict()
+    assert data["provider"] == "ollama"
+    assert data["mode"] == "improve"
+    assert "hi" in data["prompt"]
+    assert data["raw"] == "<html>503</html>"
 
 
 def test_ollama_happy_path(monkeypatch):

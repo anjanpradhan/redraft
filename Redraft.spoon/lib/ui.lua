@@ -28,9 +28,9 @@ return function(obj, ctx)
     local text = (tostring(msg):gsub("^Redraft:?%s*", ""))
     local onClick
     if cat == "error" then
-      obj._lastError = detail or text
+      obj._lastError = detail or { error = text }
       onClick = function()
-        obj:showText("Redraft — Error", obj._lastError)
+        obj:showError(obj._lastError)
       end
     end
     send({ informativeText = text }, cat, onClick)
@@ -193,7 +193,26 @@ return function(obj, ctx)
     self:_openModal("Redraft — " .. outcome, table.concat(p))
   end
 
+  function obj:showError(detail)
+    local d = (type(detail) == "table") and detail or { error = tostring(detail or "") }
+    local meta = {}
+    if d.provider and d.provider ~= "" then meta[#meta + 1] = tostring(d.provider) end
+    if d.mode and d.mode ~= "" then meta[#meta + 1] = tostring(d.mode) end
+    local prov = (#meta > 0) and table.concat(meta, " · ") or ""
+    local p = {
+      ('<header><span class="badge err">Error</span><span class="title">Redraft</span><span class="prov">%s</span></header>'):format(
+        htmlEscape(prov)
+      ),
+    }
+    p[#p + 1] = field("Details", "err", d.error or d.message or tostring(detail or ""), "main")
+    if d.raw and d.raw ~= "" then p[#p + 1] = field("Agent response", "raw", d.raw, "small") end
+    if d.command and d.command ~= "" then p[#p + 1] = field("Command", "cmd", d.command, "small", true) end
+    if d.prompt and d.prompt ~= "" then p[#p + 1] = field("Prompt sent", "prompt", d.prompt, "small", true) end
+    self:_openModal("Redraft — Error", table.concat(p))
+  end
+
   function obj:showText(title, text)
+    if type(text) == "table" then return self:showError(text) end
     local header = '<header><span class="badge err">Error</span><span class="title">Redraft</span></header>'
     self:_openModal(title, header .. field("Details", "t", text, "main"))
   end

@@ -24,6 +24,41 @@ class ReviewResult:
     raw: str | None = None
 
 
+class ReviewError(RuntimeError):
+    """Engine error with provider context that the UI can surface for debugging."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str | None = None,
+        mode: str | None = None,
+        command: str | None = None,
+        prompt: str | None = None,
+        raw: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.provider = provider
+        self.mode = mode
+        self.command = command
+        self.prompt = prompt
+        self.raw = raw
+
+    def to_dict(self) -> dict[str, str]:
+        out = {"error": str(self)}
+        if self.provider:
+            out["provider"] = self.provider
+        if self.mode:
+            out["mode"] = self.mode
+        if self.command:
+            out["command"] = self.command
+        if self.prompt:
+            out["prompt"] = self.prompt
+        if self.raw:
+            out["raw"] = self.raw
+        return out
+
+
 class Provider(Protocol):
     name: str
 

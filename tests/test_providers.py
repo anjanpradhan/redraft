@@ -1,5 +1,6 @@
 import pytest
 
+from redraft.base import ReviewError
 from redraft.prompt import build_result, extract_json
 from redraft.providers import _shell, command
 
@@ -76,6 +77,19 @@ def test_command_error_includes_long_stderr():
     with pytest.raises(RuntimeError) as ei:
         command.review("hi", "fix", {"command": {"cmd": cmd}})
     assert "E" * 400 in str(ei.value)
+
+
+def test_shell_error_includes_prompt_and_raw_response():
+    cmd = "printf 'partial stdout'; printf 'bad stderr' >&2; exit 1"
+    with pytest.raises(ReviewError) as ei:
+        _shell.run(cmd, "SENSITIVE", 1000, "agent:test")
+
+    data = ei.value.to_dict()
+    assert data["provider"] == "agent:test"
+    assert data["command"] == cmd
+    assert data["prompt"] == "SENSITIVE"
+    assert "partial stdout" in data["raw"]
+    assert "bad stderr" in data["raw"]
 
 
 def test_shell_prompt_file_placeholder_redacts_command():
