@@ -45,8 +45,12 @@ personal, not IT. Then select text → ⌥⌘F / ⌥⌘I.
 ## How it works
 
 ```
-selection ─⌘C→ Spoon (Lua) ─→ <venv>/bin/python3 -m redraft --mode … ─→ {revised}  ─⌘V→ replaces it
+selection ─read→ Spoon (Lua) ─→ <venv>/bin/python3 -m redraft --mode … ─→ {revised}  ─⌘V→ replaces it
 ```
+
+The Spoon reads your selection via the macOS Accessibility API (no clipboard write, so nothing lands
+in clipboard-history apps), falling back to a synthetic ⌘C only in apps that don't expose it (Electron
+apps like Slack/VSCode, browser content, terminals). Password fields are skipped, never read.
 
 The engine auto-protects high-signal technical spans — `` `code` ``, [markdown](links), URLs,
 emails, `$ENV` vars, file paths (`./x`, `~/x`, `/a/b`), version strings (`v1.2.3`), `@mentions`,

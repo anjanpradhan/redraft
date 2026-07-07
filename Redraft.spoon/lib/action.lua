@@ -1,6 +1,7 @@
 return function(obj, ctx)
   local clipboard = ctx.clipboard
   local focus = ctx.focus
+  local selection = ctx.selection
   local ui = ctx.ui
 
   local function decodeJson(s)
@@ -37,7 +38,7 @@ return function(obj, ctx)
       os.remove(run.infile)
       run.infile = nil
     end
-    if run.saved then clipboard.restore(run.saved) end
+    if run.clipboardTouched and run.saved then clipboard.restore(run.saved) end
     self:stopSpinner()
   end
 
@@ -63,27 +64,19 @@ return function(obj, ctx)
     end
     local function fail(message, detail)
       cleanupFile()
-      clipboard.restore(run.saved)
+      if run.clipboardTouched then clipboard.restore(run.saved) end
       clearRun()
       return ui.notify(message, "error", detail)
     end
     local saved = clipboard.snapshot()
     run.saved = saved
-    local before = hs.pasteboard.changeCount()
     local frontApp = hs.application.frontmostApplication()
     local focusSnapshot = focus.snapshot(frontApp)
-    hs.eventtap.keyStroke({ "cmd" }, "c", 0)
 
-    hs.timer.doAfter(ctx.SETTLE, function()
-      if not current() or not self.enabled then return end
-      if hs.pasteboard.changeCount() == before then
-        clearRun()
-        return ui.notify("Redraft: nothing selected", "error")
-      end
-      local text = hs.pasteboard.getContents()
-      if not text or text == "" then return fail("Redraft: empty selection") end
-
-      clipboard.setTextQuiet("")
+    -- Run the engine on the acquired selection and paste the result back. Shared by both the AX
+    -- and clipboard acquisition paths. Write-back always goes through the tagged-transient ⌘V, so
+    -- it never lands in clipboard history regardless of how the selection was read.
+    local function runEngine(text)
       clipboard.ensurePrivateTmpDir()
       local infile = ctx.TMP_DIR .. "/sel-" .. hs.host.uuid()
       run.infile = infile
@@ -141,6 +134,7 @@ return function(obj, ctx)
           prompt = data.prompt,
           raw = data.raw,
         }
+        run.clipboardTouched = true
         clipboard.setTextQuiet(data.revised)
         hs.eventtap.keyStroke({ "cmd" }, "v", 0)
         hs.timer.doAfter(ctx.SETTLE, function()
@@ -161,6 +155,39 @@ return function(obj, ctx)
         self:stopSpinner()
         fail("Redraft: could not launch engine — check " .. ctx.VENV_PY)
       end
+    end
+
+    -- Prefer the Accessibility API: read the selection without touching the pasteboard, so nothing
+    -- lands in clipboard-history managers. Fall back to a ⌘C round-trip only when AX reading isn't
+    -- available (Electron/browser/terminal fields typically return nil).
+    local axElem = selection.focusedElement()
+    if axElem and selection.isSecure(axElem) then
+      clearRun()
+      return ui.notify("Redraft: secure field — skipped", "status")
+    end
+    local axText = axElem and selection.read(axElem)
+    if type(axText) == "string" then
+      if axText == "" then
+        clearRun()
+        return ui.notify("Redraft: nothing selected", "error")
+      end
+      return runEngine(axText)
+    end
+
+    -- Clipboard fallback: synthesize ⌘C, then read the copied selection.
+    local before = hs.pasteboard.changeCount()
+    hs.eventtap.keyStroke({ "cmd" }, "c", 0)
+    hs.timer.doAfter(ctx.SETTLE, function()
+      if not current() or not self.enabled then return end
+      if hs.pasteboard.changeCount() == before then
+        clearRun()
+        return ui.notify("Redraft: nothing selected", "error")
+      end
+      local text = hs.pasteboard.getContents()
+      if not text or text == "" then return fail("Redraft: empty selection") end
+      run.clipboardTouched = true
+      clipboard.setTextQuiet("")
+      runEngine(text)
     end)
   end
 end

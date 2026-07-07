@@ -83,6 +83,7 @@ end
 
 ctx.clipboard = loadLib("clipboard")(ctx)
 ctx.focus = loadLib("focus")(ctx)
+ctx.selection = loadLib("selection")(ctx)
 ctx.ui = loadLib("ui")(obj, ctx)
 loadLib("config")(obj, ctx)
 ctx.service = loadLib("services")(obj, ctx)

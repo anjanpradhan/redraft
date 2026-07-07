@@ -29,7 +29,8 @@ selection ─⌘C→ Redraft.spoon (Lua: hotkeys, menu-bar, enable/disable)
   (status, pause/resume + restart, provider switch with the active provider shown inline,
   on-demand server Start/Stop/Restart via `launchctl`, edit/reload config). Must be Hammerspoon —
   that's where macOS global hotkeys + selection access live. `init.lua` is the entrypoint; focused
-  modules under `Redraft.spoon/lib/` own clipboard, focus, UI, config, services, action, and menu code.
+  modules under `Redraft.spoon/lib/` own clipboard, focus, selection (AX read), UI, config, services,
+  action, and menu code.
 - **Python engine** = all logic (protection, token invariant, embedded fixer, five providers,
   config). A proper **`src/redraft` package** built with hatchling, typed, **stdlib-only at
   runtime** (no third-party runtime deps), and **unit-tested with pytest**. This is where
@@ -115,15 +116,23 @@ protected by the path rule.
 ## Trigger & menu-bar (Spoon)
 
 - Hotkeys from config (default ⌥⌘F / ⌥⌘I); `redraft(mode)` = capture focused app/window/AX element
-  → copy → run engine (async via `hs.task`, so Hammerspoon never freezes during a slow Improve) →
-  paste only if focus still matches, restore the original clipboard payload. Our
-  clipboard writes are tagged transient/auto-generated (nspasteboard.org), so compliant clipboard
-  managers don't log the revised text or the restore as history entries. (The app's own `⌘C` of the
-  selection can't be tagged — that's the one entry that may still appear.) The copied selection is
+  → **read the selection** → run engine (async via `hs.task`, so Hammerspoon never freezes during a
+  slow Improve) → paste only if focus still matches, restore the original clipboard payload.
+  **Reading the selection prefers the Accessibility API** (`selection.lua`:
+  `AXFocusedUIElement` → `AXSelectedText`), which reads the text **without touching the pasteboard at
+  all** — so nothing lands in clipboard-history managers, even ones that don't honor the nspasteboard
+  convention. Only when AX reading isn't available (usually `nil` for Electron apps like Slack/VSCode,
+  browser web content, and terminals) does it **fall back to a synthetic `⌘C`** round-trip; that
+  fallback is the one path whose `⌘C` — an untagged write performed by the target app, which we can't
+  tag — may still appear in clipboard history. Password fields (`AXSecureTextField`) are detected and
+  **skipped** — never read, never copied. Write-back always goes through a tagged-transient `⌘V`: our
+  clipboard writes carry the `org.nspasteboard` transient/auto-generated tags, so compliant clipboard
+  managers don't log the revised text or the restore. In the `⌘C` fallback the copied selection is
   **cleared from the clipboard immediately after it's read** (a transient empty write), so the text
   doesn't linger on the pasteboard while the engine runs; the original clipboard is restored at the end
-  via Hammerspoon's all-data pasteboard API, with text as a compatibility fallback. The selection
-  hand-off file is written under a private
+  via Hammerspoon's all-data pasteboard API, with text as a compatibility fallback. On the pure-AX path
+  the clipboard is never touched, so nothing is written or restored (the restore is guarded on whether
+  we actually touched the clipboard). The selection hand-off file is written under a private
   `~/.local/share/redraft/tmp` directory (`0700`, file `0600`). During an Improve run the
   menu-bar title animates a braille **spinner** (Fix is instant, so it doesn't).
 - Needs Hammerspoon **Accessibility** permission (one-time) to synthesize ⌘C/⌘V.
@@ -246,7 +255,7 @@ Hammerspoon/Homebrew/Java/Ollama alone.
 |---|---|
 | `src/redraft/` | engine package: `protect`, `engine`, `config`, `base`, `prompt`, `cli`, `providers/`, `prompts/` (bundled `*-prompt.txt` templates) |
 | `tests/` | pytest suite (no Hammerspoon needed) |
-| `Redraft.spoon/init.lua` + `Redraft.spoon/lib/` | thin Hammerspoon trigger + menu-bar modules (calls `<venv>/bin/python3 -m redraft`) |
+| `Redraft.spoon/init.lua` + `Redraft.spoon/lib/` | thin Hammerspoon trigger + menu-bar modules (`selection` = AX read; `clipboard` = ⌘C/⌘V fallback; calls `<venv>/bin/python3 -m redraft`) |
 | `pyproject.toml` · `.pre-commit-config.yaml` · `_typos.toml` · `.python-version` | tooling |
 | `install.sh` / `uninstall.sh` | installer / uninstaller |
 | `README.md` | usage |
